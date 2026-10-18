@@ -9,7 +9,7 @@ sur le passage souligné en pointillés (mobile).
 ## Stack (100 % gratuite)
 - **Next.js 16** (App Router, TypeScript, Tailwind)
 - **Supabase en local** (Docker) : Postgres + pgvector, authentification par code email, stockage des fichiers
-- **IA gratuite** : Gemini Flash (lecture PDF/images, embeddings), Groq, modèles `:free` d'OpenRouter
+- **IA gratuite** : Gemini Flash (lecture PDF/images, résumés, embeddings), Groq (questions rapides), OpenRouter en option
 
 ## Lancer le projet
 Prérequis : Node 20+, Docker Desktop démarré.
@@ -30,7 +30,9 @@ npm run dev
 - [x] Étape 1 : projet, schéma de base de données, authentification complète
   (inscription email + mot de passe avec vérification par code, connexion, mot de passe oublié,
   page « Mon compte » : changement de mot de passe, suppression du compte et de toutes ses données)
-- [ ] Étape 2 : création de cours, upload (PDF, MD, TXT, DOCX, PPTX), extraction et découpage
-- [ ] Étape 3 : couche IA multi-fournisseurs avec bascule automatique, plan du cours, résumé par partie avec sources
+- [x] Étape 2 : création de cours, upload (PDF, Word, PowerPoint, Markdown, texte, images), lecture des PDF par Gemini
+  (formules en LaTeX, schémas décrits), découpage en extraits citables, embeddings
+- [x] Étape 3 : couche IA multi-fournisseurs avec bascule automatique, plan des cours longs, résumé « débutant »
+  par partie avec sources vérifiées et corrigés repliables, questions dans la conversation (recherche sémantique)
 - [ ] Étape 4 : sélection → menu (surligner / question / ce que j'ai compris), bulles latérales, panneau mobile
 - [ ] Étape 5 : statut « compris », réglages des modèles, rendu maths (KaTeX) et schémas (Mermaid)
