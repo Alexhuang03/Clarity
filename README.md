@@ -22,11 +22,14 @@ npm run dev
 ```
 
 - Application : http://localhost:3000
-- Boîte mail de test (codes de connexion) : http://127.0.0.1:54324
+- Boîte mail de test : http://127.0.0.1:54324 (utilisée si `[auth.email.smtp] enabled = false`)
+- Envoi réel via Gmail : renseigner `SMTP_USER` / `SMTP_PASS` (mot de passe d'application) dans `supabase/.env.local`
 - Supabase Studio (base de données) : http://127.0.0.1:54323
 
 ## Feuille de route
-- [x] Étape 1 : projet, schéma de base de données, connexion par code à 6 chiffres
+- [x] Étape 1 : projet, schéma de base de données, authentification complète
+  (inscription email + mot de passe avec vérification par code, connexion, mot de passe oublié,
+  page « Mon compte » : changement de mot de passe, suppression du compte et de toutes ses données)
 - [ ] Étape 2 : création de cours, upload (PDF, MD, TXT, DOCX, PPTX), extraction et découpage
 - [ ] Étape 3 : couche IA multi-fournisseurs avec bascule automatique, plan du cours, résumé par partie avec sources
 - [ ] Étape 4 : sélection → menu (surligner / question / ce que j'ai compris), bulles latérales, panneau mobile

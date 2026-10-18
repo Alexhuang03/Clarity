@@ -1,8 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
+import { connection } from "next/server";
 import { cookies } from "next/headers";
 
-// Un nouveau client par requête (ne jamais le partager entre requêtes)
+// Un nouveau client par requête (ne jamais le partager entre requêtes).
+// connection() : Supabase compare l'expiration du jeton avec Date.now(), donc ce code
+// doit s'exécuter au moment de la requête et jamais pendant un prérendu (Cache Components).
 export async function createClient() {
+  await connection();
   const cookieStore = await cookies();
 
   return createServerClient(

@@ -1,7 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login"];
+// Pages accessibles sans être connecté (un utilisateur connecté y est renvoyé vers l'accueil)
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password"];
 
 // Rafraîchit la session Supabase et redirige vers /login si l'utilisateur n'est pas connecté.
 export async function updateSession(request: NextRequest) {
@@ -33,11 +34,17 @@ export async function updateSession(request: NextRequest) {
   if (!data?.claims && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    url.search = "";
+    // Après connexion, on revient sur la page demandée
+    if (request.nextUrl.pathname !== "/") {
+      url.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
+    }
     return NextResponse.redirect(url);
   }
   if (data?.claims && isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
+    url.search = "";
     return NextResponse.redirect(url);
   }
 
