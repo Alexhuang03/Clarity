@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { EditCourseForm } from "@/components/course/edit-course-form";
+import { ShareButton } from "@/components/course/share-dialog";
 import { DeleteCourseButton } from "./delete-course-button";
 
 export function CourseHeader({
@@ -50,6 +51,13 @@ export function CourseHeader({
           >
             Modifier
           </button>
+          <ShareButton
+            courseId={courseId}
+            title={title}
+            className="rounded-lg px-3 py-1.5 text-sm opacity-60 hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
+          >
+            Partager
+          </ShareButton>
           <DeleteCourseButton courseId={courseId} title={title} />
         </>
       )}

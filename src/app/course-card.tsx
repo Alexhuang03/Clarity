@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useState } from "react";
 import { EditCourseForm } from "@/components/course/edit-course-form";
+import { ShareButton, ShareIcon } from "@/components/course/share-dialog";
+
+const ICON_BUTTON =
+  "rounded-lg bg-black/5 p-2 transition hover:bg-indigo-500/15 hover:text-indigo-600 dark:bg-white/10 dark:hover:text-indigo-300";
 
 export function CourseCard({
   id,
@@ -39,7 +43,7 @@ export function CourseCard({
     <div className="group relative h-full">
       <Link
         href={`/courses/${id}`}
-        className="block h-full rounded-2xl border border-black/10 p-5 pr-12 transition hover:border-indigo-500 hover:shadow-sm dark:border-white/15"
+        className="block h-full rounded-2xl border border-black/10 p-5 pr-24 transition hover:border-indigo-500 hover:shadow-sm dark:border-white/15"
       >
         {subject && (
           <span className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
@@ -52,18 +56,23 @@ export function CourseCard({
           {new Date(createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
         </p>
       </Link>
-      {/* Bouton hors du lien : visible au survol sur ordinateur, toujours visible sur écran tactile */}
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        aria-label={`Modifier le cours ${title}`}
-        title="Modifier le titre ou la matière"
-        className="absolute right-3 top-3 rounded-lg bg-black/5 p-2 opacity-70 transition hover:bg-indigo-500/15 hover:text-indigo-600 hover:opacity-100 focus:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 dark:bg-white/10 dark:hover:text-indigo-300"
-      >
-        <svg aria-hidden viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-          <path d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-.793.793-2.828-2.828.793-.793ZM11.379 5.793 3 14.172V17h2.828l8.38-8.379-2.83-2.828Z" />
-        </svg>
-      </button>
+      {/* Boutons hors du lien : visibles au survol sur ordinateur, toujours visibles sur écran tactile */}
+      <div className="absolute right-3 top-3 flex gap-1 opacity-70 transition focus-within:opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+        <ShareButton courseId={id} title={title} className={ICON_BUTTON}>
+          <ShareIcon />
+        </ShareButton>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          aria-label={`Modifier le cours ${title}`}
+          title="Modifier le titre ou la matière"
+          className={ICON_BUTTON}
+        >
+          <svg aria-hidden viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+            <path d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-.793.793-2.828-2.828.793-.793ZM11.379 5.793 3 14.172V17h2.828l8.38-8.379-2.83-2.828Z" />
+          </svg>
+        </button>
+      </div>
     </div>
   );
 }

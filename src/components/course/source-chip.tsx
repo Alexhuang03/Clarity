@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { createContext, use, useState } from "react";
 import { getDocumentUrl } from "@/app/courses/actions";
 import type { Source } from "@/lib/course/sources";
 
 function sourceLabel(source: Source) {
   return `${source.filename.replace(/\.[^.]+$/, "")}${source.page ? ` · p.${source.page}` : ""}`;
 }
+
+/** false sur une page partagée : les fichiers originaux restent privés, on n'affiche que l'extrait. */
+export const SourcesOpenable = createContext(true);
 
 /** Ouvre le document original, à la bonne page pour un PDF. */
 async function openSource(source: Source) {
@@ -20,10 +23,11 @@ async function openSource(source: Source) {
 
 /** Pastille numérotée dans le texte : discrète, le détail s'affiche au survol. */
 export function CitationPill({ source, number }: { source: Source; number: number }) {
+  const openable = use(SourcesOpenable);
   return (
     <button
       type="button"
-      onClick={() => openSource(source)}
+      onClick={openable ? () => openSource(source) : undefined}
       title={`${sourceLabel(source)}${source.section ? ` — ${source.section}` : ""}\n\n${source.excerpt}…`}
       aria-label={`Source ${number} : ${sourceLabel(source)}`}
       className="mx-px inline-flex h-[1.15rem] min-w-[1.15rem] -translate-y-px items-center justify-center rounded-full bg-indigo-500/15 px-1 align-middle text-[0.65rem] font-semibold leading-none text-indigo-700 no-underline transition hover:bg-indigo-500 hover:text-white dark:text-indigo-300"
@@ -36,6 +40,7 @@ export function CitationPill({ source, number }: { source: Source; number: numbe
 /** Liste des sources citées, en bas d'une réponse. */
 export function SourcesList({ sources }: { sources: { source: Source; number: number }[] }) {
   const [open, setOpen] = useState(false);
+  const openable = use(SourcesOpenable);
   if (sources.length === 0) return null;
   const visible = open ? sources : sources.slice(0, 4);
   return (
@@ -46,7 +51,7 @@ export function SourcesList({ sources }: { sources: { source: Source; number: nu
           <li key={source.n}>
             <button
               type="button"
-              onClick={() => openSource(source)}
+              onClick={openable ? () => openSource(source) : undefined}
               title={source.excerpt}
               className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-black/5 dark:hover:bg-white/5"
             >

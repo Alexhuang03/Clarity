@@ -172,3 +172,33 @@ export async function getDocumentUrl(documentId: string) {
   const { data } = await supabase.storage.from("documents").createSignedUrl(doc.storage_path, 600);
   return data?.signedUrl ?? null;
 }
+
+export type CourseShare = { path: string; sharedAt: string } | null;
+
+/** Lien de partage actuel du cours (null s'il n'est pas partagé). */
+export async function getCourseShare(courseId: string): Promise<CourseShare> {
+  await getCurrentUser();
+  const supabase = await createClient();
+  const { data } = await supabase.from("course_shares").select("token, shared_at").eq("course_id", courseId).maybeSingle();
+  return data ? { path: `/share/${data.token}`, sharedAt: data.shared_at } : null;
+}
+
+/** Crée le lien de partage, ou le met à jour pour inclure les derniers messages (le lien ne change pas). */
+export async function shareCourse(courseId: string): Promise<{ share?: CourseShare; error?: string }> {
+  await getCurrentUser();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("course_shares")
+    .upsert({ course_id: courseId, shared_at: new Date().toISOString() }, { onConflict: "course_id" })
+    .select("token, shared_at")
+    .single();
+  if (error || !data) return { error: "Impossible de créer le lien de partage." };
+  return { share: { path: `/share/${data.token}`, sharedAt: data.shared_at } };
+}
+
+/** Supprime le lien : il ne fonctionne plus pour personne. */
+export async function unshareCourse(courseId: string) {
+  await getCurrentUser();
+  const supabase = await createClient();
+  await supabase.from("course_shares").delete().eq("course_id", courseId);
+}

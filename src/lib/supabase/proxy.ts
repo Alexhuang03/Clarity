@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // Pages accessibles sans être connecté (un utilisateur connecté y est renvoyé vers l'accueil)
 const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password"];
+// Pages accessibles à tous, connecté ou non (liens de partage)
+const OPEN_PATHS = ["/share/"];
 
 // Rafraîchit la session Supabase et redirige vers /login si l'utilisateur n'est pas connecté.
 export async function updateSession(request: NextRequest) {
@@ -29,6 +31,7 @@ export async function updateSession(request: NextRequest) {
   );
 
   const { data } = await supabase.auth.getClaims();
+  if (OPEN_PATHS.some((p) => request.nextUrl.pathname.startsWith(p))) return response;
   const isPublic = PUBLIC_PATHS.some((p) => request.nextUrl.pathname.startsWith(p));
 
   if (!data?.claims && !isPublic) {

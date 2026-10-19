@@ -32,7 +32,7 @@ function AssistantHeader({ kind, partTitle }: { kind: "summary" | "chat"; partTi
  * Un message de la conversation. Mémorisé : il n'est réaffiché que si son contenu change,
  * pas à chaque touche tapée ni à chaque morceau de texte reçu pour un autre message.
  */
-const MessageItem = memo(function MessageItem({ message, partTitle }: { message: MessageRow; partTitle?: string }) {
+export const MessageItem = memo(function MessageItem({ message, partTitle }: { message: MessageRow; partTitle?: string }) {
   if (message.role === "user") {
     return (
       <div className="flex justify-end pt-2">
