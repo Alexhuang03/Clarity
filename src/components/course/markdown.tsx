@@ -167,34 +167,6 @@ export function summaryHeadings(messageId: string, content: string) {
   }));
 }
 
-/** Sommaire cliquable des titres ## et ###. */
-function TableOfContents({ text, prefix }: { text: string; prefix: string }) {
-  const items = headingsOf(text).map((h, i) => ({ ...h, id: `${prefix}-${i}` }));
-  if (items.length < 3) return null;
-  return (
-    // Sur grand écran, le sommaire est dans la colonne de gauche (CourseOutline)
-    <nav aria-label="Sommaire" className="mb-5 rounded-2xl lg:hidden border border-black/10 p-5 dark:border-white/10">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide opacity-50">Sommaire</p>
-      <ul className="space-y-1 text-sm">
-        {items.map((item) => (
-          <li key={item.id} className={item.level === 3 ? "pl-5" : ""}>
-            <a
-              href={`#${item.id}`}
-              onClick={(e) => {
-                e.preventDefault();
-                document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
-              className={`hover:text-indigo-600 hover:underline dark:hover:text-indigo-400 ${item.level === 2 ? "font-medium" : "opacity-75"}`}
-            >
-              {item.text}
-            </a>
-          </li>
-        ))}
-      </ul>
-    </nav>
-  );
-}
-
 /**
  * Réponse de l'IA.
  * - "summary" : sommaire en tête, puis chaque grande partie (##) dans sa propre carte.
@@ -205,13 +177,11 @@ export function Markdown({
   content,
   sources = [],
   variant = "chat",
-  streaming = false,
   messageId,
 }: {
   content: string;
   sources?: Source[];
   variant?: "summary" | "chat";
-  streaming?: boolean;
   /** Message enregistré : ses titres reçoivent des ids stables, repris par le sommaire de la page */
   messageId?: string;
 }) {
@@ -229,7 +199,6 @@ export function Markdown({
     );
     return (
       <div>
-        {!streaming && <TableOfContents text={text} prefix={idPrefix} />}
         <div className="space-y-5">
           {sections.map((section, i) => {
             const sectionBase = bases[i];

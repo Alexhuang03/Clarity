@@ -20,7 +20,7 @@ export function SharedConversation({
   const partTitle = useCallback((id: string | null) => parts.find((p) => p.id === id)?.title, [parts]);
   return (
     <SourcesOpenable value={false}>
-      <CourseColumns aside={<CourseOutline messages={messages} partTitle={partTitle} />}>
+      <CourseColumns aside={<CourseOutline messages={messages} parts={parts} />}>
         <div className="space-y-10 py-8">
           {messages.length === 0 ? (
             <p className="text-center opacity-70">Ce cours n&apos;a pas encore de résumé.</p>

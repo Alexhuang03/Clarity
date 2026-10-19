@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import type { MessageRow } from "@/lib/course/types";
+import type { MessageRow, PartRow } from "@/lib/course/types";
 import { summaryHeadings } from "./markdown";
 
 // Le sommaire reste sobre : pas d'emoji devant les titres
@@ -12,30 +12,39 @@ function scrollTo(id: string) {
 }
 
 /**
- * Sommaire du cours, fixé dans la colonne de gauche sur grand écran.
+ * Sommaire du cours : dans la marge de gauche sur très grand écran, dans un panneau sinon.
  * Les parties sont numérotées ; seules les sections de la partie en cours de lecture sont dépliées.
  */
 export const CourseOutline = memo(function CourseOutline({
   messages,
-  partTitle,
+  parts,
+  onNavigate,
 }: {
   messages: MessageRow[];
-  partTitle: (id: string | null) => string | undefined;
+  parts: PartRow[];
+  /** Appelé avant de défiler vers un titre (ex. fermer le panneau sur mobile) */
+  onNavigate?: () => void;
 }) {
+  function go(id: string) {
+    onNavigate?.();
+    // Une image plus tard : le panneau est fermé et la page peut défiler
+    requestAnimationFrame(() => scrollTo(id));
+  }
+
   const groups = useMemo(
     () =>
       messages
         .filter((m) => m.role === "assistant" && m.kind === "summary")
         .map((m) => ({
           id: m.id,
-          title: partTitle(m.part_id) ?? "Résumé",
+          title: parts.find((p) => p.id === m.part_id)?.title ?? "Résumé",
           // Les grandes sections (##) seulement : les sous-titres encombrent le sommaire
           sections: summaryHeadings(m.id, m.content)
             .filter((h) => h.level === 2)
             .map((h) => ({ id: h.id, text: stripEmoji(h.text) })),
         }))
         .filter((g) => g.sections.length > 0),
-    [messages, partTitle],
+    [messages, parts],
   );
   const active = useActiveHeading(groups.flatMap((g) => g.sections.map((s) => s.id)));
   const activeGroup = groups.find((g) => g.sections.some((s) => s.id === active))?.id ?? groups[0]?.id;
@@ -60,7 +69,7 @@ export const CourseOutline = memo(function CourseOutline({
               {!single && (
                 <button
                   type="button"
-                  onClick={() => scrollTo(group.sections[0].id)}
+                  onClick={() => go(group.sections[0].id)}
                   className={`flex w-full gap-3 rounded-md py-1.5 text-left transition ${
                     open ? "font-medium" : "opacity-50 hover:opacity-90"
                   }`}
@@ -79,7 +88,7 @@ export const CourseOutline = memo(function CourseOutline({
                           href={`#${section.id}`}
                           onClick={(e) => {
                             e.preventDefault();
-                            scrollTo(section.id);
+                            go(section.id);
                           }}
                           aria-current={current ? "location" : undefined}
                           className={`relative block py-1 pl-3 transition before:absolute before:left-0 before:top-1/2 before:h-1 before:w-1 before:-translate-y-1/2 before:rounded-full before:transition ${
@@ -102,6 +111,11 @@ export const CourseOutline = memo(function CourseOutline({
     </nav>
   );
 });
+
+/** True s'il y a au moins un résumé avec des titres (sinon le sommaire est vide). */
+export function hasOutline(messages: MessageRow[]) {
+  return messages.some((m) => m.role === "assistant" && m.kind === "summary" && /^## /m.test(m.content));
+}
 
 /** Dernier titre passé sous le haut de l'écran. */
 function useActiveHeading(ids: string[]) {

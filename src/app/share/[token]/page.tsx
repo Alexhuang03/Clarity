@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { MessageRow, PartRow } from "@/lib/course/types";
-import { COURSE_COLUMNS } from "@/components/course/layout";
+import { COURSE_FRAME, COURSE_MARGIN } from "@/components/course/layout";
+import { OutlineButton } from "@/components/course/outline-button";
 import { SharedConversation } from "./shared-conversation";
 
 type SharedCourse = {
@@ -18,7 +19,9 @@ type SharedCourse = {
 export default function SharePage({ params }: PageProps<"/share/[token]">) {
   return (
     <main className="flex flex-1 flex-col">
-      <Suspense fallback={<div className="mx-auto mt-16 h-8 w-64 animate-pulse rounded-lg bg-black/5 dark:bg-white/10" />}>
+      <Suspense
+        fallback={<div className="mx-auto mt-16 h-8 w-64 animate-pulse rounded-lg bg-black/5 dark:bg-white/10" />}
+      >
         <SharedContent params={params} />
       </Suspense>
     </main>
@@ -34,20 +37,27 @@ async function SharedContent({ params }: { params: Promise<{ token: string }> })
 
   return (
     <>
-      <div className={COURSE_COLUMNS}>
-        <div aria-hidden className="hidden lg:block" />
-        <header className="py-6">
-          {course.subject && (
-            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
-              {course.subject.name}
+      <div className={COURSE_FRAME}>
+        <div aria-hidden className={`hidden xl:block ${COURSE_MARGIN}`} />
+        <header className="flex items-start gap-3 py-6">
+          <div className="min-w-0 flex-1">
+            {course.subject && (
+              <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
+                {course.subject.name}
+              </p>
+            )}
+            <h1 className="text-xl font-semibold">{course.title}</h1>
+            <p className="mt-1 text-sm opacity-60">
+              Cours partagé le{" "}
+              {new Date(course.shared_at).toLocaleDateString("fr-FR", {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })}{" "}
+              · lecture seule
             </p>
-          )}
-          <h1 className="text-xl font-semibold">{course.title}</h1>
-          <p className="mt-1 text-sm opacity-60">
-            Cours partagé le{" "}
-            {new Date(course.shared_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}{" "}
-            · lecture seule
-          </p>
+          </div>
+          <OutlineButton messages={course.messages} parts={course.parts} />
         </header>
       </div>
 
