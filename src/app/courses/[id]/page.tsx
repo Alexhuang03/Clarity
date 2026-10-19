@@ -1,11 +1,10 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { CourseRow, DocumentRow, MessageRow, PartRow } from "@/lib/course/types";
 import { Workspace } from "@/components/course/workspace";
-import { DeleteCourseButton } from "./delete-course-button";
+import { CourseHeader } from "./course-header";
 
 export default function CoursePage({ params }: PageProps<"/courses/[id]">) {
   return (
@@ -22,7 +21,7 @@ async function CourseContent({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   const supabase = await createClient();
 
-  const [{ data: course }, { data: documents }, { data: parts }, { data: messages }] = await Promise.all([
+  const [{ data: course }, { data: documents }, { data: parts }, { data: messages }, { data: subjects }] = await Promise.all([
     supabase.from("courses").select("id, title, analyzed_at, subject:subjects(name, color)").eq("id", id).maybeSingle(),
     supabase
       .from("documents")
@@ -35,21 +34,18 @@ async function CourseContent({ params }: { params: Promise<{ id: string }> }) {
       .select("id, role, kind, part_id, content, sources, created_at")
       .eq("course_id", id)
       .order("created_at"),
+    supabase.from("subjects").select("name").order("name"),
   ]);
   if (!course) notFound();
 
   return (
     <>
-      <header className="mx-auto flex w-full max-w-3xl items-center gap-3 px-4 py-6">
-        <Link href="/" className="text-sm opacity-60 hover:opacity-100" aria-label="Retour à mes cours">
-          ←
-        </Link>
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-xl font-semibold">{course.title}</h1>
-          {course.subject && <p className="text-sm opacity-60">{(course.subject as unknown as { name: string }).name}</p>}
-        </div>
-        <DeleteCourseButton courseId={course.id} title={course.title} />
-      </header>
+      <CourseHeader
+        courseId={course.id}
+        title={course.title}
+        subject={(course.subject as unknown as { name: string } | null)?.name ?? null}
+        subjects={(subjects ?? []).map((s) => s.name)}
+      />
       <Workspace
         course={course as unknown as CourseRow}
         userId={user.id}

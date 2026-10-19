@@ -74,7 +74,7 @@ type ServerSupabase = Awaited<ReturnType<typeof createClient>>;
 async function resolveSubject(supabase: ServerSupabase, name: string): Promise<string | null> {
   if (!name) return null;
   // ilike traite % et _ comme des jokers : on les échappe pour une comparaison exacte
-  const pattern = name.replace(/[\%_]/g, (c) => `\${c}`);
+  const pattern = name.replace(/[\\%_]/g, (c) => `\\${c}`);
   const { data: existing } = await supabase.from("subjects").select("id").ilike("name", pattern).limit(1).maybeSingle();
   if (existing) return existing.id;
   const { data: created } = await supabase.from("subjects").insert({ name }).select("id").single();
