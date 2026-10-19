@@ -18,16 +18,7 @@ export async function createCourse(
 
   await getCurrentUser();
   const supabase = await createClient();
-
-  let subjectId: string | null = null;
-  if (subjectName) {
-    const { data: existing } = await supabase.from("subjects").select("id").ilike("name", subjectName).maybeSingle();
-    subjectId = existing?.id ?? null;
-    if (!subjectId) {
-      const { data: created } = await supabase.from("subjects").insert({ name: subjectName }).select("id").single();
-      subjectId = created?.id ?? null;
-    }
-  }
+  const subjectId = await resolveSubject(supabase, subjectName);
 
   const { data: course, error } = await supabase
     .from("courses")
@@ -43,9 +34,61 @@ export async function deleteCourse(courseId: string) {
   const supabase = await createClient();
   const { data: docs } = await supabase.from("documents").select("storage_path").eq("course_id", courseId);
   if (docs?.length) await supabase.storage.from("documents").remove(docs.map((d) => d.storage_path));
+  const { data: course } = await supabase.from("courses").select("subject_id").eq("id", courseId).maybeSingle();
   await supabase.from("courses").delete().eq("id", courseId).eq("user_id", user.id);
+  await deleteSubjectIfUnused(supabase, course?.subject_id ?? null);
   revalidatePath("/");
   redirect("/");
+}
+
+const TITLE_MAX = 120;
+const SUBJECT_MAX = 60;
+
+export async function updateCourse(
+  courseId: string,
+  input: { title: string; subject: string },
+): Promise<{ error: string | null }> {
+  const title = input.title.trim().slice(0, TITLE_MAX);
+  const subjectName = input.subject.trim().slice(0, SUBJECT_MAX);
+  if (!title) return { error: "Le titre ne peut pas être vide." };
+
+  await getCurrentUser();
+  const supabase = await createClient();
+  // RLS : ne renvoie le cours que s'il appartient à l'utilisateur
+  const { data: course } = await supabase.from("courses").select("subject_id").eq("id", courseId).maybeSingle();
+  if (!course) return { error: "Cours introuvable." };
+
+  const subjectId = await resolveSubject(supabase, subjectName);
+  const { error } = await supabase.from("courses").update({ title, subject_id: subjectId }).eq("id", courseId);
+  if (error) return { error: "Impossible d'enregistrer les modifications." };
+
+  if (course.subject_id !== subjectId) await deleteSubjectIfUnused(supabase, course.subject_id);
+  revalidatePath("/");
+  revalidatePath(`/courses/${courseId}`);
+  return { error: null };
+}
+
+type ServerSupabase = Awaited<ReturnType<typeof createClient>>;
+
+/** Matière existante (sans tenir compte des majuscules) ou nouvelle matière ; null si vide. */
+async function resolveSubject(supabase: ServerSupabase, name: string): Promise<string | null> {
+  if (!name) return null;
+  // ilike traite % et _ comme des jokers : on les échappe pour une comparaison exacte
+  const pattern = name.replace(/[\%_]/g, (c) => `\${c}`);
+  const { data: existing } = await supabase.from("subjects").select("id").ilike("name", pattern).limit(1).maybeSingle();
+  if (existing) return existing.id;
+  const { data: created } = await supabase.from("subjects").insert({ name }).select("id").single();
+  return created?.id ?? null;
+}
+
+/** Supprime une matière qui n'est plus utilisée par aucun cours (évite d'encombrer les suggestions). */
+async function deleteSubjectIfUnused(supabase: ServerSupabase, subjectId: string | null) {
+  if (!subjectId) return;
+  const { count } = await supabase
+    .from("courses")
+    .select("id", { count: "exact", head: true })
+    .eq("subject_id", subjectId);
+  if (count === 0) await supabase.from("subjects").delete().eq("id", subjectId);
 }
 
 const ALLOWED_EXTENSIONS = ["pdf", "md", "txt", "docx", "pptx", "png", "jpg", "jpeg", "webp"];

@@ -10,6 +10,23 @@ import { Markdown } from "./markdown";
 
 type Streaming = { kind: "summary" | "chat"; partId?: string; content: string } | null;
 
+/** En-tête d'un message de l'IA : distingue clairement qui parle, et le type de réponse. */
+function AssistantHeader({ kind, partTitle }: { kind: "summary" | "chat"; partTitle?: string }) {
+  return (
+    <div className="mb-3 flex items-center gap-2">
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">
+        C
+      </span>
+      <span className="text-sm font-semibold">Clarity</span>
+      {kind === "summary" && (
+        <span className="truncate rounded-full bg-indigo-500/10 px-2.5 py-0.5 text-xs font-medium text-indigo-700 dark:text-indigo-300">
+          Résumé{partTitle ? ` · ${partTitle}` : ""}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function Workspace({
   course,
   userId,
@@ -137,7 +154,7 @@ export function Workspace({
         defaultOpen={messages.length === 0}
       />
 
-      <div className="flex-1 space-y-8 py-8">
+      <div className="flex-1 space-y-10 py-8">
         {documents.length === 0 && (
           <p className="text-center opacity-70">
             Commence par ajouter les fichiers de ton cours et tes exercices ci-dessus.
@@ -169,32 +186,32 @@ export function Workspace({
 
         {messages.map((message) =>
           message.role === "user" ? (
-            <div key={message.id} className="flex justify-end">
-              <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-indigo-600 px-4 py-2 text-white">
+            <div key={message.id} className="flex justify-end pt-2">
+              <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-indigo-600 px-4 py-2.5 leading-relaxed text-white">
                 {message.content}
               </p>
             </div>
           ) : (
             <article key={message.id}>
-              {message.kind === "summary" && (
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
-                  Résumé{partTitle(message.part_id) ? ` · ${partTitle(message.part_id)}` : ""}
-                </p>
-              )}
-              <Markdown content={message.content} sources={message.sources} />
+              <AssistantHeader kind={message.kind} partTitle={partTitle(message.part_id)} />
+              <Markdown
+                content={message.content}
+                sources={message.sources}
+                variant={message.kind === "summary" ? "summary" : "chat"}
+              />
             </article>
           ),
         )}
 
         {streaming && (
           <article aria-live="polite">
-            {streaming.kind === "summary" && (
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
-                Résumé{partTitle(streaming.partId ?? null) ? ` · ${partTitle(streaming.partId ?? null)}` : ""}
-              </p>
-            )}
+            <AssistantHeader kind={streaming.kind} partTitle={partTitle(streaming.partId ?? null)} />
             {streaming.content ? (
-              <Markdown content={streaming.content} />
+              <Markdown
+                content={streaming.content}
+                variant={streaming.kind === "summary" ? "summary" : "chat"}
+                streaming
+              />
             ) : (
               <p className="animate-pulse opacity-60">
                 {streaming.kind === "summary" ? "Rédaction du résumé…" : "Réflexion…"}
