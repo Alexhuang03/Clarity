@@ -1,10 +1,12 @@
 "use client";
 
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { readStream } from "@/lib/course/read-stream";
 import type { CourseRow, DocumentRow, MessageRow, PartRow } from "@/lib/course/types";
 import { analyzeCourse } from "@/app/courses/actions";
+import { CourseOutline } from "./course-outline";
+import { CourseColumns } from "./layout";
 import { DocumentsPanel } from "./documents-panel";
 import { Markdown } from "./markdown";
 import { ThinkingPanel } from "./thinking-panel";
@@ -46,7 +48,12 @@ export const MessageItem = memo(function MessageItem({ message, partTitle }: { m
     <article>
       <AssistantHeader kind={message.kind} partTitle={partTitle} />
       {message.thinking && <ThinkingPanel text={message.thinking} durationMs={message.thinking_ms} />}
-      <Markdown content={message.content} sources={message.sources} variant={message.kind === "summary" ? "summary" : "chat"} />
+      <Markdown
+        content={message.content}
+        sources={message.sources}
+        variant={message.kind === "summary" ? "summary" : "chat"}
+        messageId={message.id}
+      />
     </article>
   );
 });
@@ -219,10 +226,10 @@ export function Workspace({
     return ok;
   }
 
-  const partTitle = (id: string | null) => parts.find((p) => p.id === id)?.title;
+  const partTitle = useCallback((id: string | null) => parts.find((p) => p.id === id)?.title, [parts]);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 pb-4">
+    <CourseColumns aside={<CourseOutline messages={messages} partTitle={partTitle} />}>
       <DocumentsPanel
         courseId={course.id}
         userId={userId}
@@ -328,6 +335,7 @@ export function Workspace({
       </div>
 
       <ChatInput disabled={ready.length === 0} busy={busy} onSend={ask} />
-    </div>
+    </CourseColumns>
   );
 }
+

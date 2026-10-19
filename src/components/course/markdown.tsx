@@ -68,7 +68,7 @@ const withCitationLinks = (text: string) => text.replace(/\[S(\d+)\]/g, "[S$1](#
 const HEADING_LINE = /^#{2,3}\s+/;
 
 /** Titres ## et ### du texte, dans l'ordre d'affichage. */
-function headingsOf(text: string) {
+export function headingsOf(text: string) {
   return [...text.matchAll(/^(#{2,3})\s+(.+?)\s*#*$/gm)].map((m) => ({
     level: m[1].length,
     // Le sommaire affiche le titre sans la mise en forme Markdown
@@ -94,9 +94,7 @@ type Context = {
  * ce qui reste stable même quand React affiche deux fois un composant en développement).
  */
 function MarkdownBlock({ text, ctx, headingBase }: { text: string; ctx: Context; headingBase: number }) {
-  const headingLines = text
-    .split("\n")
-    .flatMap((line, i) => (HEADING_LINE.test(line) ? [i + 1] : []));
+  const headingLines = text.split("\n").flatMap((line, i) => (HEADING_LINE.test(line) ? [i + 1] : []));
   const headingId = (line?: number) => {
     const local = line ? headingLines.indexOf(line) : -1;
     return ctx.idPrefix && local >= 0 ? `${ctx.idPrefix}-${headingBase + local}` : undefined;
@@ -137,7 +135,10 @@ function MarkdownBlock({ text, ctx, headingBase }: { text: string; ctx: Context;
 /** Texte découpé en blocs normaux et corrigés repliables. */
 function Blocks({ text, ctx, headingBase }: { text: string; ctx: Context; headingBase: number }) {
   const segments = splitCorriges(text);
-  const bases = offsets(segments.map((s) => headingsOf(s.text).length), headingBase);
+  const bases = offsets(
+    segments.map((s) => headingsOf(s.text).length),
+    headingBase,
+  );
   return segments.map((segment, i) => {
     const segmentBase = bases[i];
     return segment.type === "corrige" ? (
@@ -155,12 +156,24 @@ function Blocks({ text, ctx, headingBase }: { text: string; ctx: Context; headin
   });
 }
 
+/** Id du titre n°index d'un message : le même dans le message et dans le sommaire de la page. */
+export const headingAnchor = (messageId: string, index: number) => `h-${messageId}-${index}`;
+
+/** Titres d'un résumé, avec leur id (même normalisation que l'affichage). */
+export function summaryHeadings(messageId: string, content: string) {
+  return headingsOf(normalizeMath(normalizeCitations(content))).map((h, i) => ({
+    ...h,
+    id: headingAnchor(messageId, i),
+  }));
+}
+
 /** Sommaire cliquable des titres ## et ###. */
 function TableOfContents({ text, prefix }: { text: string; prefix: string }) {
   const items = headingsOf(text).map((h, i) => ({ ...h, id: `${prefix}-${i}` }));
   if (items.length < 3) return null;
   return (
-    <nav aria-label="Sommaire" className="mb-5 rounded-2xl border border-black/10 p-5 dark:border-white/10">
+    // Sur grand écran, le sommaire est dans la colonne de gauche (CourseOutline)
+    <nav aria-label="Sommaire" className="mb-5 rounded-2xl lg:hidden border border-black/10 p-5 dark:border-white/10">
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide opacity-50">Sommaire</p>
       <ul className="space-y-1 text-sm">
         {items.map((item) => (
@@ -193,20 +206,27 @@ export function Markdown({
   sources = [],
   variant = "chat",
   streaming = false,
+  messageId,
 }: {
   content: string;
   sources?: Source[];
   variant?: "summary" | "chat";
   streaming?: boolean;
+  /** Message enregistré : ses titres reçoivent des ids stables, repris par le sommaire de la page */
+  messageId?: string;
 }) {
-  const idPrefix = `h${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const generatedId = `h${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const idPrefix = messageId ? `h-${messageId}` : generatedId;
   const text = normalizeMath(normalizeCitations(content));
   const { numberOf, cited } = citationNumbers(text, sources);
   const ctx: Context = { sources, numberOf, idPrefix };
 
   if (variant === "summary") {
     const sections = splitSections(text);
-    const bases = offsets(sections.map((s) => headingsOf(s).length), 0);
+    const bases = offsets(
+      sections.map((s) => headingsOf(s).length),
+      0,
+    );
     return (
       <div>
         {!streaming && <TableOfContents text={text} prefix={idPrefix} />}
@@ -216,7 +236,7 @@ export function Markdown({
             return (
               <section
                 key={i}
-                className={`${PROSE} rounded-2xl border border-black/10 bg-black/[0.015] px-4 py-5 sm:p-7 dark:border-white/10 dark:bg-white/[0.02] [&_h2]:scroll-mt-6 [&_h3]:scroll-mt-6`}
+                className={`${PROSE} rounded-2xl border border-black/10 bg-black/[0.015] px-4 py-5 sm:p-7 dark:border-white/10 dark:bg-white/[0.02] [&_h2]:scroll-mt-24 [&_h3]:scroll-mt-24`}
               >
                 <Blocks text={section} ctx={ctx} headingBase={sectionBase} />
               </section>

@@ -4,6 +4,8 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* Barres de défilement et champs natifs assortis au thème clair ou sombre */
+  color-scheme: light dark;
 }
 
 @theme inline {
