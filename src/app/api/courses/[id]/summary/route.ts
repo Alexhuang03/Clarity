@@ -1,10 +1,9 @@
 import { embed } from "@/lib/ai/gemini";
-import { modelChain, type ModelId } from "@/lib/ai/models";
-import { streamWithFallback } from "@/lib/ai/providers";
+import { modelChain } from "@/lib/ai/models";
 import { loadCourseContext } from "@/lib/course/context";
 import { summaryPrompt } from "@/lib/course/prompts";
 import { finalizeCitations, formatSources, numberSources, type SourceChunk } from "@/lib/course/sources";
-import { ndjsonResponse } from "@/lib/course/stream";
+import { ndjsonResponse, streamAnswer } from "@/lib/course/stream";
 import { createClient } from "@/lib/supabase/server";
 
 // Au-delà, on ne garde que les extraits d'exercices les plus proches de la partie
@@ -74,11 +73,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const chunks = [...coursChunks, ...exoChunks];
   const sources = numberSources(chunks, ctx.documents);
-  let model: ModelId | null = null;
-
   return ndjsonResponse(async (send) => {
-    let content = "";
-    for await (const text of streamWithFallback(
+    const { content, thinking, thinkingMs, model } = await streamAnswer(
       modelChain("summary", ctx.summaryModel),
       {
         system: summaryPrompt(ctx.level, exoChunks.length > 0),
@@ -90,11 +86,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         ],
         maxTokens: 16384,
       },
-      (m) => (model = m),
-    )) {
-      content += text;
-      send({ type: "delta", text });
-    }
+      send,
+    );
 
     const final = finalizeCitations(content, sources);
     const { data: message, error } = await supabase
@@ -107,6 +100,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         content: final.content,
         sources: final.sources,
         model,
+        thinking,
+        thinking_ms: thinkingMs,
       })
       .select()
       .single();

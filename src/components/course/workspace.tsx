@@ -7,8 +7,9 @@ import type { CourseRow, DocumentRow, MessageRow, PartRow } from "@/lib/course/t
 import { analyzeCourse } from "@/app/courses/actions";
 import { DocumentsPanel } from "./documents-panel";
 import { Markdown } from "./markdown";
+import { ThinkingPanel } from "./thinking-panel";
 
-type Streaming = { kind: "summary" | "chat"; partId?: string; content: string } | null;
+type Streaming = { kind: "summary" | "chat"; partId?: string; content: string; thinking: string } | null;
 
 /** En-tête d'un message de l'IA : distingue clairement qui parle, et le type de réponse. */
 function AssistantHeader({ kind, partTitle }: { kind: "summary" | "chat"; partTitle?: string }) {
@@ -79,7 +80,7 @@ export function Workspace({
 
   async function generateSummary(part: PartRow) {
     setError(null);
-    setStreaming({ kind: "summary", partId: part.id, content: "" });
+    setStreaming({ kind: "summary", partId: part.id, content: "", thinking: "" });
     const response = await fetch(`/api/courses/${course.id}/summary`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -87,6 +88,7 @@ export function Workspace({
     });
     await readStream(response, (event) => {
       if (event.type === "delta") setStreaming((s) => s && { ...s, content: s.content + event.text });
+      if (event.type === "thinking") setStreaming((s) => s && { ...s, thinking: s.thinking + event.text });
       if (event.type === "done") setMessages((m) => [...m, event.message as MessageRow]);
       if (event.type === "error") setError(event.error);
     });
@@ -118,7 +120,7 @@ export function Workspace({
       ...m,
       { id: pendingId, role: "user", kind: "chat", part_id: null, content, sources: [], created_at: new Date().toISOString() },
     ]);
-    setStreaming({ kind: "chat", content: "" });
+    setStreaming({ kind: "chat", content: "", thinking: "" });
     const response = await fetch(`/api/courses/${course.id}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -126,6 +128,7 @@ export function Workspace({
     });
     await readStream(response, (event) => {
       if (event.type === "delta") setStreaming((s) => s && { ...s, content: s.content + event.text });
+      if (event.type === "thinking") setStreaming((s) => s && { ...s, thinking: s.thinking + event.text });
       if (event.type === "done") {
         const message = event.message as MessageRow;
         setMessages((m) =>
@@ -194,6 +197,7 @@ export function Workspace({
           ) : (
             <article key={message.id}>
               <AssistantHeader kind={message.kind} partTitle={partTitle(message.part_id)} />
+              {message.thinking && <ThinkingPanel text={message.thinking} durationMs={message.thinking_ms} />}
               <Markdown
                 content={message.content}
                 sources={message.sources}
@@ -206,6 +210,7 @@ export function Workspace({
         {streaming && (
           <article aria-live="polite">
             <AssistantHeader kind={streaming.kind} partTitle={partTitle(streaming.partId ?? null)} />
+            {streaming.thinking && <ThinkingPanel text={streaming.thinking} live={!streaming.content} />}
             {streaming.content ? (
               <Markdown
                 content={streaming.content}
@@ -213,9 +218,11 @@ export function Workspace({
                 streaming
               />
             ) : (
-              <p className="animate-pulse opacity-60">
-                {streaming.kind === "summary" ? "Rédaction du résumé…" : "Réflexion…"}
-              </p>
+              !streaming.thinking && (
+                <p className="animate-pulse opacity-60">
+                  {streaming.kind === "summary" ? "Préparation du résumé…" : "Réflexion…"}
+                </p>
+              )
             )}
           </article>
         )}

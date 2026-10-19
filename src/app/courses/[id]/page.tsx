@@ -31,7 +31,7 @@ async function CourseContent({ params }: { params: Promise<{ id: string }> }) {
     supabase.from("course_parts").select("id, ordinal, title").eq("course_id", id).order("ordinal"),
     supabase
       .from("messages")
-      .select("id, role, kind, part_id, content, sources, created_at")
+      .select("id, role, kind, part_id, content, sources, thinking, thinking_ms, created_at")
       .eq("course_id", id)
       .order("created_at"),
     supabase.from("subjects").select("name").order("name"),

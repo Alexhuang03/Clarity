@@ -1,10 +1,10 @@
 import { embed } from "@/lib/ai/gemini";
-import { modelChain, type ModelId } from "@/lib/ai/models";
-import { streamWithFallback, type ChatMessage } from "@/lib/ai/providers";
+import { modelChain } from "@/lib/ai/models";
+import type { ChatMessage } from "@/lib/ai/providers";
 import { loadCourseContext } from "@/lib/course/context";
 import { chatPrompt } from "@/lib/course/prompts";
 import { finalizeCitations, formatSources, numberSources } from "@/lib/course/sources";
-import { ndjsonResponse } from "@/lib/course/stream";
+import { ndjsonResponse, streamAnswer } from "@/lib/course/stream";
 import { createClient } from "@/lib/supabase/server";
 
 const MAX_QUESTION = 4000;
@@ -63,18 +63,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     },
   ];
 
-  let model: ModelId | null = null;
   return ndjsonResponse(async (send) => {
     send({ type: "done", message: userMessage });
-    let content = "";
-    for await (const text of streamWithFallback(
+    const { content, thinking, thinkingMs, model } = await streamAnswer(
       modelChain("chat", ctx.chatModel),
       { system: chatPrompt(ctx.level), messages, maxTokens: 4096 },
-      (m) => (model = m),
-    )) {
-      content += text;
-      send({ type: "delta", text });
-    }
+      send,
+    );
     const final = finalizeCitations(content, sources);
     const { data: message, error } = await supabase
       .from("messages")
@@ -85,6 +80,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         content: final.content,
         sources: final.sources,
         model,
+        thinking,
+        thinking_ms: thinkingMs,
       })
       .select()
       .single();

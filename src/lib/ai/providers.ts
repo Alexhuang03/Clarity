@@ -49,7 +49,10 @@ async function* sseData(res: Response): AsyncGenerator<string> {
   }
 }
 
-async function* streamGemini(model: string, req: ChatRequest): AsyncGenerator<string> {
+/** Morceau de flux : texte de la réponse, ou réflexion du modèle (affichée à part). */
+export type StreamChunk = { type: "text" | "thought"; text: string };
+
+async function* streamGemini(model: string, req: ChatRequest): AsyncGenerator<StreamChunk> {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`,
     {
@@ -64,6 +67,8 @@ async function* streamGemini(model: string, req: ChatRequest): AsyncGenerator<st
         generationConfig: {
           maxOutputTokens: req.maxTokens ?? 8192,
           temperature: req.temperature ?? 0.4,
+          // Gemini renvoie alors un résumé de sa réflexion (parties marquées "thought")
+          thinkingConfig: { includeThoughts: true },
           ...(req.json ? { responseMimeType: "application/json" } : {}),
         },
       }),
@@ -71,12 +76,10 @@ async function* streamGemini(model: string, req: ChatRequest): AsyncGenerator<st
   );
   await check(res, model);
   for await (const data of sseData(res)) {
-    const chunk = JSON.parse(data);
-    const text = chunk.candidates?.[0]?.content?.parts
-      ?.filter((p: { thought?: boolean }) => !p.thought)
-      .map((p: { text?: string }) => p.text ?? "")
-      .join("");
-    if (text) yield text;
+    const parts: { text?: string; thought?: boolean }[] = JSON.parse(data).candidates?.[0]?.content?.parts ?? [];
+    for (const part of parts) {
+      if (part.text) yield { type: part.thought ? "thought" : "text", text: part.text };
+    }
   }
 }
 
@@ -85,7 +88,7 @@ async function* streamOpenAICompatible(
   provider: "groq" | "openrouter",
   model: string,
   req: ChatRequest,
-): AsyncGenerator<string> {
+): AsyncGenerator<StreamChunk> {
   const url =
     provider === "groq"
       ? "https://api.groq.com/openai/v1/chat/completions"
@@ -105,8 +108,10 @@ async function* streamOpenAICompatible(
   await check(res, model);
   for await (const data of sseData(res)) {
     if (data === "[DONE]") break;
-    const text = JSON.parse(data).choices?.[0]?.delta?.content;
-    if (text) yield text;
+    // Les modèles de raisonnement (gpt-oss...) envoient leur réflexion dans "reasoning"
+    const delta = JSON.parse(data).choices?.[0]?.delta ?? {};
+    if (delta.reasoning) yield { type: "thought", text: delta.reasoning };
+    if (delta.content) yield { type: "text", text: delta.content };
   }
 }
 
@@ -119,22 +124,28 @@ function streamModel(model: ModelId, req: ChatRequest) {
 
 /**
  * Génère une réponse en flux en essayant chaque modèle de la chaîne.
- * On ne bascule que si le modèle échoue AVANT d'avoir produit du texte
- * (sinon l'utilisateur verrait deux réponses mélangées).
+ * On ne bascule que si le modèle échoue AVANT d'avoir produit du texte de réponse
+ * (sinon l'utilisateur verrait deux réponses mélangées). Une réflexion déjà affichée
+ * reste visible, suivie d'une note indiquant le changement de modèle.
  */
 export async function* streamWithFallback(
   chain: ModelId[],
   req: ChatRequest,
   onModel?: (model: ModelId) => void,
-): AsyncGenerator<string> {
+): AsyncGenerator<StreamChunk> {
   let lastError: unknown;
-  for (const model of chain) {
+  let thought = false;
+  for (const [index, model] of chain.entries()) {
     let started = false;
     try {
       onModel?.(model);
-      for await (const text of streamModel(model, req)) {
-        started = true;
-        yield text;
+      if (index > 0 && thought) {
+        yield { type: "thought", text: `\n\n*— Modèle indisponible, nouvel essai avec ${model.split(":")[1]} —*\n\n` };
+      }
+      for await (const chunk of streamModel(model, req)) {
+        if (chunk.type === "text") started = true;
+        else thought = true;
+        yield chunk;
       }
       if (started) return;
       lastError = new Error(`${model} n'a rien renvoyé`);
@@ -148,9 +159,9 @@ export async function* streamWithFallback(
   throw lastError ?? new Error("Aucun modèle disponible");
 }
 
-/** Version non streamée (petites tâches, JSON). */
+/** Version non streamée (petites tâches, JSON) : seule la réponse compte. */
 export async function generateWithFallback(chain: ModelId[], req: ChatRequest): Promise<string> {
   let text = "";
-  for await (const part of streamWithFallback(chain, req)) text += part;
+  for await (const chunk of streamWithFallback(chain, req)) if (chunk.type === "text") text += chunk.text;
   return text;
 }

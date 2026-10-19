@@ -1,6 +1,7 @@
 // Lecture côté navigateur du flux NDJSON envoyé par les routes /api/courses/[id]/...
 export type ClientStreamEvent =
   | { type: "delta"; text: string }
+  | { type: "thinking"; text: string }
   | { type: "done"; message: unknown }
   | { type: "error"; error: string };
 

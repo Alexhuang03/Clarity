@@ -22,6 +22,9 @@ export type MessageRow = {
   part_id: string | null;
   content: string;
   sources: Source[];
+  /** Réflexion du modèle pendant la rédaction (null si le modèle n'en fournit pas) */
+  thinking?: string | null;
+  thinking_ms?: number | null;
   created_at: string;
 };
 
