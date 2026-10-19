@@ -59,7 +59,7 @@ export function ThinkingPanel({
           className="prose prose-sm prose-neutral max-h-72 max-w-none overflow-y-auto border-t border-black/10 px-4 py-3 opacity-75 dark:prose-invert dark:border-white/10 prose-p:my-2 prose-headings:text-sm"
         >
           <p className="!mt-0 text-xs italic opacity-60">
-            Raisonnement interne du modèle, rédigé en anglais.
+            Raisonnement interne du modèle (souvent rédigé en anglais).
           </p>
           {/* Les repères de sources [S2] n'ont pas de sens dans la réflexion : on les retire */}
           <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>

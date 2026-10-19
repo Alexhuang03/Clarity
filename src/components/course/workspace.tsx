@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { readStream } from "@/lib/course/read-stream";
 import type { CourseRow, DocumentRow, MessageRow, PartRow } from "@/lib/course/types";
@@ -28,6 +28,83 @@ function AssistantHeader({ kind, partTitle }: { kind: "summary" | "chat"; partTi
   );
 }
 
+/**
+ * Un message de la conversation. Mémorisé : il n'est réaffiché que si son contenu change,
+ * pas à chaque touche tapée ni à chaque morceau de texte reçu pour un autre message.
+ */
+const MessageItem = memo(function MessageItem({ message, partTitle }: { message: MessageRow; partTitle?: string }) {
+  if (message.role === "user") {
+    return (
+      <div className="flex justify-end pt-2">
+        <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-indigo-600 px-4 py-2.5 leading-relaxed text-white">
+          {message.content}
+        </p>
+      </div>
+    );
+  }
+  return (
+    <article>
+      <AssistantHeader kind={message.kind} partTitle={partTitle} />
+      {message.thinking && <ThinkingPanel text={message.thinking} durationMs={message.thinking_ms} />}
+      <Markdown content={message.content} sources={message.sources} variant={message.kind === "summary" ? "summary" : "chat"} />
+    </article>
+  );
+});
+
+/**
+ * Barre de question. Elle garde son texte pour elle : taper ne réaffiche que la barre,
+ * et pas toute la conversation (qui peut contenir de longs résumés avec des formules).
+ * onSend renvoie false si l'envoi a échoué : la question est alors remise dans la barre.
+ */
+function ChatInput({
+  disabled,
+  busy,
+  onSend,
+}: {
+  disabled: boolean;
+  busy: boolean;
+  onSend: (content: string) => Promise<boolean>;
+}) {
+  const [value, setValue] = useState("");
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const content = value.trim();
+    if (!content || busy || disabled) return;
+    setValue("");
+    if (!(await onSend(content))) setValue(content);
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      className="sticky bottom-4 flex items-end gap-2 rounded-2xl border border-black/10 bg-[var(--background)] p-2 shadow-lg dark:border-white/15"
+    >
+      <textarea
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            e.currentTarget.form?.requestSubmit();
+          }
+        }}
+        rows={1}
+        maxLength={4000}
+        disabled={disabled}
+        placeholder={disabled ? "Ajoute un document pour poser des questions" : "Pose une question sur ton cours…"}
+        className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 outline-none [field-sizing:content]"
+      />
+      <button
+        disabled={busy || disabled || !value.trim()}
+        className="rounded-xl bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
+      >
+        Envoyer
+      </button>
+    </form>
+  );
+}
+
 export function Workspace({
   course,
   userId,
@@ -49,7 +126,6 @@ export function Workspace({
   const [streaming, setStreaming] = useState<Streaming>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [question, setQuestion] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const ready = documents.filter((d) => d.status === "ready");
@@ -108,12 +184,9 @@ export function Workspace({
     if (newParts.length === 1) await generateSummary(newParts[0]);
   }
 
-  async function ask(e: React.FormEvent) {
-    e.preventDefault();
-    const content = question.trim();
-    if (!content || busy) return;
+  async function ask(content: string): Promise<boolean> {
+    let ok = true;
     setError(null);
-    setQuestion("");
     // Affichage immédiat de la question, remplacée par la version enregistrée à la réception
     const pendingId = `pending-${Date.now()}`;
     setMessages((m) => [
@@ -139,10 +212,11 @@ export function Workspace({
         setError(event.error);
         // La question n'a pas été enregistrée si le serveur a refusé : on la rend à l'utilisateur
         setMessages((m) => m.filter((x) => x.id !== pendingId));
-        setQuestion(content);
+        ok = false;
       }
     });
     setStreaming(null);
+    return ok;
   }
 
   const partTitle = (id: string | null) => parts.find((p) => p.id === id)?.title;
@@ -187,25 +261,9 @@ export function Workspace({
           </p>
         )}
 
-        {messages.map((message) =>
-          message.role === "user" ? (
-            <div key={message.id} className="flex justify-end pt-2">
-              <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-indigo-600 px-4 py-2.5 leading-relaxed text-white">
-                {message.content}
-              </p>
-            </div>
-          ) : (
-            <article key={message.id}>
-              <AssistantHeader kind={message.kind} partTitle={partTitle(message.part_id)} />
-              {message.thinking && <ThinkingPanel text={message.thinking} durationMs={message.thinking_ms} />}
-              <Markdown
-                content={message.content}
-                sources={message.sources}
-                variant={message.kind === "summary" ? "summary" : "chat"}
-              />
-            </article>
-          ),
-        )}
+        {messages.map((message) => (
+          <MessageItem key={message.id} message={message} partTitle={partTitle(message.part_id)} />
+        ))}
 
         {streaming && (
           <article aria-live="polite">
@@ -269,32 +327,7 @@ export function Workspace({
         <div ref={bottomRef} />
       </div>
 
-      <form
-        onSubmit={ask}
-        className="sticky bottom-4 flex items-end gap-2 rounded-2xl border border-black/10 bg-[var(--background)] p-2 shadow-lg dark:border-white/15"
-      >
-        <textarea
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              e.currentTarget.form?.requestSubmit();
-            }
-          }}
-          rows={1}
-          maxLength={4000}
-          disabled={ready.length === 0}
-          placeholder={ready.length === 0 ? "Ajoute un document pour poser des questions" : "Pose une question sur ton cours…"}
-          className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 outline-none [field-sizing:content]"
-        />
-        <button
-          disabled={busy || !question.trim() || ready.length === 0}
-          className="rounded-xl bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
-        >
-          Envoyer
-        </button>
-      </form>
+      <ChatInput disabled={ready.length === 0} busy={busy} onSend={ask} />
     </div>
   );
 }
