@@ -3,7 +3,7 @@
 import { getCurrentUser } from "@/lib/auth";
 import type { Anchor } from "@/lib/annotations/anchor";
 import { HIGHLIGHT_COLORS, type AnnotationKind, type AnnotationRow, type HighlightColor } from "@/lib/annotations/types";
-import { isEmote } from "@/lib/annotations/lol";
+import { customEmoteId, isEmote } from "@/lib/annotations/lol";
 import { createClient } from "@/lib/supabase/server";
 
 const KINDS: AnnotationKind[] = ["highlight", "question", "understanding", "error", "reaction"];
@@ -40,7 +40,7 @@ export async function createAnnotation(input: {
   if (!anchor || !KINDS.includes(input.kind)) return { error: "Sélection invalide." };
   const color = input.kind === "highlight" && HIGHLIGHT_COLORS.includes(input.color!) ? input.color! : null;
   if (input.kind === "highlight" && !color) return { error: "Couleur invalide." };
-  const emote = input.kind === "reaction" && isEmote(input.emote) ? input.emote : null;
+  const emote = input.kind === "reaction" && typeof input.emote === "string" ? input.emote : null;
   if (input.kind === "reaction" && !emote) return { error: "Émote inconnue." };
   const text = input.text?.trim().slice(0, NOTE_MAX) ?? "";
   // Une erreur peut être signalée sans explication ; une question ou une reformulation, non
@@ -49,6 +49,12 @@ export async function createAnnotation(input: {
   }
 
   const supabase = await createClient();
+  if (emote && !isEmote(emote)) {
+    // Émote importée : elle doit exister et appartenir à l'utilisateur (RLS)
+    const id = customEmoteId(emote);
+    const { data: custom } = id ? await supabase.from("custom_emotes").select("id").eq("id", id).maybeSingle() : { data: null };
+    if (!custom) return { error: "Émote inconnue." };
+  }
   // RLS : on ne peut annoter qu'une réponse de l'IA de ses propres cours
   const { data: message } = await supabase
     .from("messages")

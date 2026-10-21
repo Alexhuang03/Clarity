@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { CourseRow, DocumentRow, MessageRow, PartRow } from "@/lib/course/types";
 import type { AnnotationRow } from "@/lib/annotations/types";
+import { loadLolPrefs } from "@/lib/annotations/prefs-server";
 import { Workspace } from "@/components/course/workspace";
 
 export default function CoursePage({ params }: PageProps<"/courses/[id]">) {
@@ -23,7 +24,7 @@ async function CourseContent({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   const supabase = await createClient();
 
-  const [{ data: course }, { data: documents }, { data: parts }, { data: messages }, { data: annotations }] = await Promise.all([
+  const [{ data: course }, { data: documents }, { data: parts }, { data: messages }, { data: annotations }, lolPrefs] = await Promise.all([
     supabase.from("courses").select("id, title, analyzed_at, subject:subjects(name, color)").eq("id", id).maybeSingle(),
     supabase
       .from("documents")
@@ -44,6 +45,7 @@ async function CourseContent({ params }: { params: Promise<{ id: string }> }) {
       )
       .eq("messages.course_id", id)
       .order("created_at"),
+    loadLolPrefs(supabase),
   ]);
   if (!course) notFound();
 
@@ -55,6 +57,7 @@ async function CourseContent({ params }: { params: Promise<{ id: string }> }) {
       initialParts={(parts ?? []) as PartRow[]}
       initialMessages={(messages ?? []) as MessageRow[]}
       initialAnnotations={(annotations ?? []) as unknown as AnnotationRow[]}
+      lolPrefs={lolPrefs}
     />
   );
 }

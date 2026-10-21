@@ -1,23 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { anchorFromRange, buildTextIndex, rangeFromAnchor, type Anchor } from "@/lib/annotations/anchor";
 import { HIGHLIGHT_COLORS, HIGHLIGHT_SWATCH, type AnnotationRow, type HighlightColor } from "@/lib/annotations/types";
 import {
-  DEFAULT_EMOTE_WHEEL,
-  emoteAnimUrl,
-  emoteLabel,
-  emoteSoundUrl,
-  emoteStillUrl,
-  PINGS,
+  emoteView,
+  pingById,
   pingIconUrl,
   pingSoundUrl,
+  PING_ACTIONS,
   TICK_SOUND,
+  type CustomEmote,
+  type EmoteView,
   type PingAction,
+  type PingDef,
 } from "@/lib/annotations/lol";
-import { playSound } from "@/lib/annotations/sound";
+import type { LolPrefs } from "@/lib/annotations/prefs";
+import { playSound, setVolume } from "@/lib/annotations/sound";
 import { createAnnotation, deleteAnnotation, updateHighlightColor } from "@/app/courses/annotation-actions";
-import { EmoteFx, hitTest, PING_LABELS, PING_ORDER, PingFx, pingItems, preloadEmote, Wheel, type WheelHit, type WheelItem } from "./wheel";
+import { saveLolPrefs } from "@/app/account/lol-actions";
+import { buildPingItems, EmoteFx, hitTest, PING_LABELS, PING_ORDER, PingFx, preloadEmote, Wheel, type WheelHit, type WheelItem } from "./wheel";
 
 type Target = { messageId: string; anchor: Anchor; rect: DOMRect };
 type WheelKind = "ping" | "emote";
@@ -26,19 +28,20 @@ type Trigger = "right" | "alt" | "ctrl" | "click";
 type WheelState = { kind: WheelKind; x: number; y: number; trigger: Trigger; target: Target };
 type Composer = { kind: Exclude<PingAction, "highlight">; target: Target };
 type MenuState = { annotation: AnnotationRow; x: number; y: number };
-type EffectInput = { x: number; y: number } & ({ type: "ping"; action: PingAction } | { type: "emote"; slug: string });
+type EffectInput = { x: number; y: number } & ({ type: "ping"; ping: PingDef } | { type: "emote"; url: string });
 type Effect = EffectInput & { id: number };
 
 // Styles des marques (API CSS Custom Highlight). Injectés ici plutôt que dans globals.css :
 // la compilation CSS de Tailwind supprime le sélecteur ::highlight(), encore récent.
-const HIGHLIGHT_CSS = `
+// Les soulignements prennent la couleur du ping choisi pour chaque action.
+const highlightCss = (pings: Record<PingAction, PingDef>) => `
 ::highlight(hl-yellow) { background-color: rgb(250 204 21 / 0.38); }
 ::highlight(hl-green) { background-color: rgb(74 222 128 / 0.32); }
 ::highlight(hl-pink) { background-color: rgb(244 114 182 / 0.32); }
 ::highlight(hl-blue) { background-color: rgb(96 165 250 / 0.32); }
-::highlight(ann-question) { text-decoration: underline dotted #f2c518 2px; }
-::highlight(ann-understanding) { text-decoration: underline solid #2b80ff 2px; }
-::highlight(ann-error) { text-decoration: underline wavy #ff3b55 1.5px; }
+::highlight(ann-question) { text-decoration: underline dotted ${pings.question.color} 2px; }
+::highlight(ann-understanding) { text-decoration: underline solid ${pings.understanding.color} 2px; }
+::highlight(ann-error) { text-decoration: underline wavy ${pings.error.color} 1.5px; }
 ::highlight(ann-pending) { background-color: rgb(99 102 241 / 0.25); }
 ::highlight(ann-focus) { background-color: rgb(99 102 241 / 0.3); }
 ::highlight(ann-reaction) { text-decoration: underline dotted #c8aa6e 2px; }
@@ -50,14 +53,6 @@ const KEY_MOVE_THRESHOLD = 8;
 const HIGHLIGHT_SLICE = PING_ORDER.indexOf("highlight");
 const COLOR_KEY = "clarity-highlight-color";
 const noSubscription = () => () => {};
-
-const emoteItems: WheelItem[] = DEFAULT_EMOTE_WHEEL.map((slug) => ({
-  key: slug,
-  label: emoteLabel(slug),
-  icon: emoteStillUrl(slug),
-  color: "#c8aa6e",
-  round: true,
-}));
 
 function readPref<T extends string>(key: string, fallback: T, allowed?: readonly T[]): T {
   try {
@@ -159,11 +154,14 @@ const KIND_LABEL: Record<AnnotationRow["kind"], string> = {
 export function AnnotationLayer({
   initialAnnotations,
   version,
+  prefs,
   children,
 }: {
   initialAnnotations: AnnotationRow[];
   /** Change quand des messages apparaissent : les marques sont alors redessinées */
   version: number;
+  /** Pings, roue d'émotes et son choisis dans « Mon compte » */
+  prefs: LolPrefs;
   children: React.ReactNode;
 }) {
   const container = useRef<HTMLDivElement>(null);
@@ -189,6 +187,22 @@ export function AnnotationLayer({
   // apparaîtrait au rendu serveur puis disparaîtrait : écart d'hydratation)
   const supported = useSyncExternalStore(noSubscription, () => "highlights" in CSS, () => true);
 
+  const [muted, setMuted] = useState(prefs.muted);
+  useEffect(() => setVolume(muted ? 0 : prefs.volume), [muted, prefs.volume]);
+
+  const pings = useMemo(
+    () => Object.fromEntries(PING_ACTIONS.map((a) => [a, pingById(prefs.pings[a])!])) as Record<PingAction, PingDef>,
+    [prefs.pings],
+  );
+  const pingItems = useMemo(() => buildPingItems(pings), [pings]);
+  const emotes = useMemo(
+    () => prefs.wheel.map((ref) => emoteView(ref, prefs.customEmotes)).filter((v): v is EmoteView => v !== null),
+    [prefs.wheel, prefs.customEmotes],
+  );
+  const emoteItems = useMemo<WheelItem[]>(
+    () => emotes.map((v) => ({ key: v.ref, label: v.label, icon: v.still, color: "#c8aa6e", round: true })),
+    [emotes],
+  );
   const items = wheel?.kind === "emote" ? emoteItems : pingItems;
 
   // ---- Dessin des marques et placement des autocollants d'émotes ----
@@ -265,11 +279,11 @@ export function AnnotationLayer({
   useEffect(() => () => CSS.highlights?.clear(), []);
 
   // ---- Effets visuels et sonores ----
-  const spawn = useCallback((effect: EffectInput, sound: string) => {
+  const spawn = useCallback((effect: EffectInput, sound: string | null) => {
     const id = Date.now() + Math.random();
     setEffects((list) => [...list, { ...effect, id }]);
     setTimeout(() => setEffects((list) => list.filter((e) => e.id !== id)), effect.type === "emote" ? 2700 : 1900);
-    void playSound(sound);
+    if (sound) void playSound(sound);
   }, []);
 
   // Petit « clic » quand la part visée change, comme dans le jeu
@@ -279,10 +293,10 @@ export function AnnotationLayer({
     if (wheel && index !== null && index !== lastHitIndex.current) {
       void playSound(pingSoundUrl(TICK_SOUND), 0.4);
       // L'animation (~1 Mo) se charge pendant qu'on vise : elle est prête au relâchement
-      if (wheel.kind === "emote") preloadEmote(emoteItems[index].key);
+      if (wheel.kind === "emote" && emotes[index]) preloadEmote(emotes[index].anim);
     }
     lastHitIndex.current = index;
-  }, [hit, wheel]);
+  }, [hit, wheel, emotes]);
 
   const closeWheel = useCallback(() => {
     setWheel(null);
@@ -296,8 +310,10 @@ export function AnnotationLayer({
       const { target } = state;
 
       if (state.kind === "emote") {
-        const slug = emoteItems[picked.index].key;
-        spawn({ type: "emote", slug, x: at.x, y: at.y }, emoteSoundUrl(slug));
+        const view = emotes[picked.index];
+        if (!view) return;
+        const slug = view.ref;
+        spawn({ type: "emote", url: view.anim, x: at.x, y: at.y }, view.sound);
         const tempId = `tmp-${Date.now()}`;
         setAnnotations((list) => [
           ...list,
@@ -312,7 +328,7 @@ export function AnnotationLayer({
       }
 
       const action = PING_ORDER[picked.index];
-      spawn({ type: "ping", action, x: at.x, y: at.y }, pingSoundUrl(PINGS[action].sound));
+      spawn({ type: "ping", ping: pings[action], x: at.x, y: at.y }, pingSoundUrl(pings[action].sound));
       if (action !== "highlight") {
         setComposer({ kind: action, target });
         return;
@@ -332,13 +348,13 @@ export function AnnotationLayer({
       );
       if (result.error) setError(result.error);
     },
-    [closeWheel, lastColor, spawn],
+    [closeWheel, lastColor, spawn, emotes, pings],
   );
 
   const hitAt = useCallback(
     (state: WheelState, x: number, y: number) =>
       hitTest(x - state.x, y - state.y, state.kind === "emote" ? emoteItems.length : pingItems.length, state.kind === "ping" ? HIGHLIGHT_SLICE : null, lastColor),
-    [lastColor],
+    [lastColor, emoteItems.length, pingItems.length],
   );
 
   // ---- Gestes à la souris ----
@@ -509,12 +525,18 @@ export function AnnotationLayer({
     await updateHighlightColor(annotation.id, color);
   }
 
+  function toggleMute() {
+    const next = !muted;
+    setMuted(next);
+    void saveLolPrefs({ muted: next }).then((r) => r.error && setError(r.error));
+  }
+
   const switchKind = () =>
     setWheel((w) => (w ? { ...w, kind: w.kind === "ping" ? "emote" : "ping", trigger: "click" } : w));
 
   return (
     <div ref={container} className="relative" onPointerDown={onPointerDown} onPointerUp={onPointerUp} onContextMenu={onContextMenu}>
-      <style>{HIGHLIGHT_CSS}</style>
+      <style>{highlightCss(pings)}</style>
       {!supported && (
         <p className="mb-4 rounded-xl bg-amber-500/10 px-4 py-2 text-sm">
           Ton navigateur ne permet pas d&apos;afficher les annotations. Mets-le à jour (Chrome, Edge, Safari ou Firefox récents).
@@ -523,9 +545,10 @@ export function AnnotationLayer({
       {children}
 
       {/* Réactions : autocollants d'émotes au bout des passages (placés par l'effet de mise en page) */}
-      {annotations
-        .filter((a) => a.kind === "reaction" && a.emote)
-        .map((a) => (
+      {annotations.map((a) => {
+        const view = a.kind === "reaction" && a.emote ? emoteView(a.emote, prefs.customEmotes) : null;
+        if (!view) return null;
+        return (
           <button
             key={a.id}
             ref={(el) => {
@@ -535,17 +558,18 @@ export function AnnotationLayer({
             type="button"
             {...stopGestures}
             onClick={(e) => setMenu({ annotation: a, x: e.clientX, y: e.clientY })}
-            title={emoteLabel(a.emote!)}
-            aria-label={`Réaction : ${emoteLabel(a.emote!)}`}
+            title={view.label}
+            aria-label={`Réaction : ${view.label}`}
             className="group absolute z-10 rounded-full transition hover:z-20 hover:scale-[2.2]"
             style={{ visibility: "hidden" }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- petite image fixe, animée au survol */}
-            <img src={emoteStillUrl(a.emote!)} alt="" className="h-full w-full rounded-full group-hover:hidden" draggable={false} />
+            <img src={view.still} alt="" className="h-full w-full rounded-full object-cover group-hover:hidden" draggable={false} />
             {/* eslint-disable-next-line @next/next/no-img-element -- animation chargée seulement au survol */}
-            <img src={emoteAnimUrl(a.emote!)} alt="" loading="lazy" className="hidden h-full w-full rounded-full group-hover:block" draggable={false} />
+            <img src={view.anim} alt="" loading="lazy" className="hidden h-full w-full rounded-full object-cover group-hover:block" draggable={false} />
           </button>
-        ))}
+        );
+      })}
 
       {wheel && (
         <>
@@ -577,13 +601,25 @@ export function AnnotationLayer({
               onPick={(picked) => void execute(wheel, picked, { x: wheel.x, y: wheel.y })}
               footer={
                 wheel.trigger === "click" ? (
-                  <button
-                    type="button"
-                    onClick={switchKind}
-                    className="rounded-full border border-[#785a28] bg-[#0a1016] px-3 py-1 text-xs font-semibold text-[#c8aa6e] shadow-lg hover:text-[#f0e6d2]"
-                  >
-                    {wheel.kind === "ping" ? "😀 Réactions (Ctrl)" : "📍 Actions (Alt)"}
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={switchKind}
+                      className="whitespace-nowrap rounded-full border border-[#785a28] bg-[#0a1016] px-3 py-1 text-xs font-semibold text-[#c8aa6e] shadow-lg hover:text-[#f0e6d2]"
+                    >
+                      {wheel.kind === "ping" ? "😀 Réactions (Ctrl)" : "📍 Actions (Alt)"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={toggleMute}
+                      title={muted ? "Réactiver le son" : "Couper le son"}
+                      aria-label={muted ? "Réactiver le son" : "Couper le son"}
+                      aria-pressed={muted}
+                      className="rounded-full border border-[#785a28] bg-[#0a1016] px-2 py-1 text-xs shadow-lg hover:brightness-125"
+                    >
+                      {muted ? "🔇" : "🔊"}
+                    </button>
+                  </div>
                 ) : null
               }
             />
@@ -592,12 +628,13 @@ export function AnnotationLayer({
       )}
 
       {effects.map((fx) =>
-        fx.type === "ping" ? <PingFx key={fx.id} x={fx.x} y={fx.y} action={fx.action} /> : <EmoteFx key={fx.id} x={fx.x} y={fx.y} slug={fx.slug} />,
+        fx.type === "ping" ? <PingFx key={fx.id} x={fx.x} y={fx.y} ping={fx.ping} /> : <EmoteFx key={fx.id} x={fx.x} y={fx.y} url={fx.url} />,
       )}
 
       {composer && (
         <ComposerPopover
           composer={composer}
+          ping={pings[composer.kind]}
           onCancel={() => setComposer(null)}
           onSaved={(annotation) => {
             setAnnotations((list) => [...list, annotation]);
@@ -606,7 +643,7 @@ export function AnnotationLayer({
         />
       )}
 
-      {menu && <AnnotationMenu state={menu} onClose={() => setMenu(null)} onDelete={removeAnnotation} onRecolor={recolor} />}
+      {menu && <AnnotationMenu state={menu} customEmotes={prefs.customEmotes} onClose={() => setMenu(null)} onDelete={removeAnnotation} onRecolor={recolor} />}
 
       {error && (
         <div role="alert" className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-red-600 px-4 py-2 text-sm text-white shadow-lg">
@@ -630,10 +667,12 @@ function popoverPosition(rect: DOMRect, width: number, height: number) {
 
 function ComposerPopover({
   composer,
+  ping,
   onCancel,
   onSaved,
 }: {
   composer: Composer;
+  ping: PingDef;
   onCancel: () => void;
   onSaved: (annotation: AnnotationRow) => void;
 }) {
@@ -641,7 +680,6 @@ function ComposerPopover({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const copy = COMPOSER_TEXT[composer.kind];
-  const ping = PINGS[composer.kind];
   const width = Math.min(380, window.innerWidth - 24);
   const required = composer.kind !== "error";
 
@@ -708,11 +746,13 @@ function ComposerPopover({
 
 function AnnotationMenu({
   state,
+  customEmotes,
   onClose,
   onDelete,
   onRecolor,
 }: {
   state: MenuState;
+  customEmotes: readonly CustomEmote[];
   onClose: () => void;
   onDelete: (a: AnnotationRow) => void;
   onRecolor: (a: AnnotationRow, color: HighlightColor) => void;
@@ -720,6 +760,7 @@ function AnnotationMenu({
   const { annotation } = state;
   const width = Math.min(320, window.innerWidth - 24);
   const rect = new DOMRect(state.x - 20, state.y, 0, 12);
+  const emote = annotation.kind === "reaction" && annotation.emote ? emoteView(annotation.emote, customEmotes) : null;
   const text = annotation.kind === "question" ? annotation.thread_messages?.find((m) => m.role === "user")?.content : annotation.note;
 
   return (
@@ -733,11 +774,11 @@ function AnnotationMenu({
         aria-label={KIND_LABEL[annotation.kind]}
       >
         <p className="text-xs font-semibold uppercase tracking-wide opacity-50">{KIND_LABEL[annotation.kind]}</p>
-        {annotation.kind === "reaction" && annotation.emote && (
+        {emote && (
           <div className="mt-2 flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element -- émote animée */}
-            <img src={emoteAnimUrl(annotation.emote)} alt="" className="h-14 w-14 rounded-full" />
-            <span className="text-sm font-medium">{emoteLabel(annotation.emote)}</span>
+            <img src={emote.anim} alt="" className="h-14 w-14 rounded-full object-cover" />
+            <span className="text-sm font-medium">{emote.label}</span>
           </div>
         )}
         {annotation.kind !== "highlight" && annotation.kind !== "reaction" && (

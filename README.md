@@ -40,6 +40,7 @@ npm run dev
     roue d'émotes (Ctrl + glisser) pour réagir à un passage, autocollants dans la marge ;
     marques ancrées au texte (API CSS Custom Highlight). Assets de lolPing / Riot Games : voir THIRD_PARTY_NOTICES.md
   - [ ] 4b. Bulles de discussion dans les marges, réponses de l'IA, revérification des erreurs signalées
-  - [ ] 4c. Personnalisation des roues dans « Mon compte » (pings, émotes, import d'images et de sons, volume)
+  - [x] 4c. Personnalisation dans « Mon compte » : ping de chaque action (12 pings), 8 émotes de la roue,
+    émotes importées (image + son, 30 max), volume et son coupé (aussi depuis la roue)
   - [ ] 4d. Mobile (panneau du bas) et annotations qui se chevauchent
 - [ ] Étape 5 : statut « compris », réglages des modèles, rendu maths (KaTeX) et schémas (Mermaid)

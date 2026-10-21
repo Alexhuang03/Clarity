@@ -13,6 +13,7 @@ import { DocumentsPanel } from "./documents-panel";
 import { Markdown } from "./markdown";
 import { AnnotationLayer } from "@/components/annotations/annotation-layer";
 import type { AnnotationRow } from "@/lib/annotations/types";
+import type { LolPrefs } from "@/lib/annotations/prefs";
 import { ThinkingPanel } from "./thinking-panel";
 
 type Streaming = { kind: "summary" | "chat"; partId?: string; content: string; thinking: string } | null;
@@ -147,6 +148,7 @@ export function Workspace({
   initialParts,
   initialMessages,
   initialAnnotations,
+  lolPrefs,
 }: {
   course: CourseRow;
   userId: string;
@@ -154,6 +156,7 @@ export function Workspace({
   initialParts: PartRow[];
   initialMessages: MessageRow[];
   initialAnnotations: AnnotationRow[];
+  lolPrefs: LolPrefs;
 }) {
   const [supabase] = useState(createClient);
   const [documents, setDocuments] = useState(initialDocuments);
@@ -313,7 +316,7 @@ export function Workspace({
             </p>
           )}
 
-          <AnnotationLayer initialAnnotations={initialAnnotations} version={messages.length}>
+          <AnnotationLayer initialAnnotations={initialAnnotations} version={messages.length} prefs={lolPrefs}>
             <div className="space-y-10">
               {messages.map((message) => (
                 <MessageItem key={message.id} message={message} partTitle={partTitle(message.part_id)} />

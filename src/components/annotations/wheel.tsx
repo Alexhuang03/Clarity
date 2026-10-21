@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { HIGHLIGHT_COLORS, HIGHLIGHT_SWATCH, type HighlightColor } from "@/lib/annotations/types";
-import { emoteAnimUrl, PINGS, pingIconUrl, type PingAction } from "@/lib/annotations/lol";
+import { pingIconUrl, type PingAction, type PingDef } from "@/lib/annotations/lol";
 
 // Roues de pings et d'émotes, reprises de lolPing (MIT) : on maintient le déclencheur
 // (clic droit, Alt ou Ctrl), on glisse vers une part, on relâche.
@@ -19,12 +19,14 @@ export const PING_LABELS: Record<PingAction, string> = {
   highlight: "Surligner",
 };
 
-export const pingItems: WheelItem[] = PING_ORDER.map((action) => ({
-  key: action,
-  label: PING_LABELS[action],
-  icon: pingIconUrl(PINGS[action].icon),
-  color: PINGS[action].color,
-}));
+/** Parts de la roue de pings, avec le ping choisi pour chaque action. */
+export const buildPingItems = (pings: Record<PingAction, PingDef>): WheelItem[] =>
+  PING_ORDER.map((action) => ({
+    key: action,
+    label: PING_LABELS[action],
+    icon: pingIconUrl(pings[action].icon),
+    color: pings[action].color,
+  }));
 
 const INNER = 38; // en deçà du rayon intérieur : annuler
 const COLOR_GAP = 12; // au-delà de la roue + cet écart : couronne de couleurs (surlignage)
@@ -200,8 +202,7 @@ export function Wheel({
 }
 
 /** Ping à l'endroit annoté : anneaux, halo au sol et icône qui rebondit (animation de lolPing). */
-export function PingFx({ x, y, action }: { x: number; y: number; action: PingAction }) {
-  const def = PINGS[action];
+export function PingFx({ x, y, ping: def }: { x: number; y: number; ping: PingDef }) {
   return (
     <div className="lol-ping" style={{ left: x, top: y, "--c": def.color } as React.CSSProperties} aria-hidden>
       <div className="ground" />
@@ -222,27 +223,35 @@ export function PingFx({ x, y, action }: { x: number; y: number; action: PingAct
 const animations = new Map<string, Promise<Blob>>();
 
 /** Précharge l'animation d'une émote (appelé quand elle est visée dans la roue). */
-export function preloadEmote(slug: string) {
-  if (!animations.has(slug)) animations.set(slug, fetch(emoteAnimUrl(slug)).then((r) => r.blob()));
+export function preloadEmote(url: string) {
+  if (!animations.has(url)) {
+    const blob = fetch(url).then((r) => (r.ok ? r.blob() : Promise.reject(new Error(String(r.status)))));
+    // Échec (hors ligne…) : on réessaiera à la prochaine apparition
+    blob.catch(() => animations.delete(url));
+    animations.set(url, blob);
+  }
 }
 
 /** Émote animée qui apparaît puis disparaît à l'endroit annoté. */
-export function EmoteFx({ x, y, slug }: { x: number; y: number; slug: string }) {
+export function EmoteFx({ x, y, url: source }: { x: number; y: number; url: string }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     let objectUrl: string | null = null;
     let cancelled = false;
-    preloadEmote(slug);
-    void animations.get(slug)!.then((blob) => {
-      if (cancelled) return;
-      objectUrl = URL.createObjectURL(blob);
-      setUrl(objectUrl);
-    });
+    preloadEmote(source);
+    animations.get(source)!.then(
+      (blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setUrl(objectUrl);
+      },
+      () => {}, // animation indisponible : seul le son est joué
+    );
     return () => {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [slug]);
+  }, [source]);
   return (
     <div className="lol-emote" style={{ left: x, top: y }} aria-hidden>
       {/* eslint-disable-next-line @next/next/no-img-element -- animation WebP jouée une fois */}

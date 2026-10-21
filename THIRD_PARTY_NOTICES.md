@@ -2,7 +2,8 @@
 
 ## lolPing
 La roue d'actions (pings et émotes), ses animations et le catalogue des émotes s'inspirent du projet
-[lolPing](https://github.com/darrenprx/lolPing) et en reprennent des définitions.
+[lolPing](https://github.com/darrenprx/lolPing) et en reprennent des définitions (catalogue des 12 pings,
+détection du type des images et des sons importés : `src/lib/annotations/sniff.ts`).
 
 ```
 MIT License

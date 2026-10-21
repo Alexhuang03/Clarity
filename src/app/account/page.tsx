@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/auth";
+import { loadLolPrefs } from "@/lib/annotations/prefs-server";
+import { createClient } from "@/lib/supabase/server";
 import { signOut } from "../actions";
 import { ChangePasswordForm, DeleteAccountForm } from "./forms";
+import { LolSettings } from "./lol-settings";
 
 export default function AccountPage() {
   return (
-    <main className="mx-auto w-full max-w-xl flex-1 px-4 py-10">
+    <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-10">
       <Link href="/" className="text-sm opacity-70 hover:opacity-100">
         ← Mes cours
       </Link>
@@ -20,6 +23,7 @@ export default function AccountPage() {
 
 async function AccountContent() {
   const user = await getCurrentUser();
+  const prefs = await loadLolPrefs(await createClient());
   return (
     <div className="mt-8 space-y-6">
       <section className="rounded-2xl border border-black/10 p-6 dark:border-white/15">
@@ -31,6 +35,10 @@ async function AccountContent() {
           </button>
         </form>
       </section>
+
+      <div id="pings-emotes" className="scroll-mt-4">
+        <LolSettings initial={prefs} />
+      </div>
 
       <section className="rounded-2xl border border-black/10 p-6 dark:border-white/15">
         <h2 className="font-medium">Changer de mot de passe</h2>

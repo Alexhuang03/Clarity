@@ -4,16 +4,40 @@
 // voir THIRD_PARTY_NOTICES.md. Fichiers servis depuis public/lol/.
 
 export type PingAction = "question" | "understanding" | "error" | "highlight";
+export const PING_ACTIONS: readonly PingAction[] = ["question", "understanding", "error", "highlight"];
 
-export type PingDef = { id: string; name: string; icon: string; sound: string; color: string };
+export type PingId =
+  | "danger" | "push" | "omw" | "allin" | "assist" | "needvision" | "missing" | "enemyvision" | "generic"
+  | "bait" | "visioncleared" | "missingflip";
 
-/** Le ping LoL associé à chaque action de Clarity (icône, son et couleur de lolPing). */
-export const PINGS: Record<PingAction, PingDef> = {
-  question: { id: "missing", name: "Enemy Missing", icon: "png_enemymissing_128x128", sound: "MIA", color: "#f2c518" },
-  error: { id: "danger", name: "Danger", icon: "pingwheel_retreatrender", sound: "SRP_12", color: "#ff3b55" },
-  understanding: { id: "visioncleared", name: "Vision Cleared", icon: "pingwheel_visionclearedrender", sound: "SRP_6", color: "#2b80ff" },
-  highlight: { id: "generic", name: "Generic", icon: "pingwheel_basicpingrender", sound: "Base", color: "#2e8bff" },
+/** icon : fichier de public/lol/pings (sans .png) · sound : fichier de public/lol/sounds (sans .wav) */
+export type PingDef = { id: PingId; name: string; label: string; icon: string; sound: string; color: string };
+
+/** Les 12 pings de lolPing (src/shared/pings.ts), avec leur nom français. */
+export const ALL_PINGS: readonly PingDef[] = [
+  { id: "missing", name: "Enemy Missing", label: "Ennemi disparu « ? »", icon: "png_enemymissing_128x128", sound: "MIA", color: "#f2c518" },
+  { id: "missingflip", name: "Upside-down Missing", label: "« ¿ » à l'envers", icon: "enemy_missing_flipped", sound: "MIA", color: "#f2c518" },
+  { id: "danger", name: "Danger", label: "Danger / Repli", icon: "pingwheel_retreatrender", sound: "SRP_12", color: "#ff3b55" },
+  { id: "enemyvision", name: "Enemy Vision", label: "Vision ennemie", icon: "pingwheel_enemyvisionrender", sound: "AreaIsWarded", color: "#ff3b55" },
+  { id: "visioncleared", name: "Vision Cleared", label: "Vision dégagée", icon: "pingwheel_visionclearedrender", sound: "SRP_6", color: "#2b80ff" },
+  { id: "generic", name: "Generic", label: "Ping simple", icon: "pingwheel_basicpingrender", sound: "Base", color: "#2e8bff" },
+  { id: "omw", name: "On My Way", label: "J'arrive", icon: "omw_cyan", sound: "OnMyWay", color: "#2e8bff" },
+  { id: "push", name: "Push", label: "Pousser", icon: "pingwheel_pushrender", sound: "SRP_9", color: "#35d27a" },
+  { id: "assist", name: "Assist Me", label: "Besoin d'aide", icon: "png_assist_me_128x128", sound: "ComeHere", color: "#35d27a" },
+  { id: "needvision", name: "Need Vision", label: "Besoin de vision", icon: "mt11_18_vision", sound: "SRP_7", color: "#35d27a" },
+  { id: "allin", name: "All In", label: "Tout donner", icon: "png_all_in", sound: "SRP_4", color: "#f2b320" },
+  { id: "bait", name: "Bait", label: "Appât", icon: "pingwheel_baitrender", sound: "SRP_11", color: "#efbc12" },
+];
+
+/** Ping associé par défaut à chaque action de Clarity. */
+export const DEFAULT_PINGS: Record<PingAction, PingId> = {
+  question: "missing",
+  error: "danger",
+  understanding: "visioncleared",
+  highlight: "generic",
 };
+
+export const pingById = (id: unknown): PingDef | undefined => ALL_PINGS.find((p) => p.id === id);
 
 /** Son joué quand le pointeur passe d'une part de la roue à une autre. */
 export const TICK_SOUND = "button";
@@ -95,8 +119,38 @@ export const DEFAULT_EMOTE_WHEEL = [
   "nice",
 ] as const;
 
+export const WHEEL_SLOTS = 8;
+
+/** Émote importée par l'utilisateur (fichiers servis par /api/emotes/<id>/...) */
+export type CustomEmote = { id: string; name: string; hasSound: boolean };
+
+const CUSTOM_PREFIX = "u:";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Une émote est désignée par son slug (émote LoL) ou par « u:<id> » (émote importée). */
+export const customEmoteRef = (id: string) => `${CUSTOM_PREFIX}${id}`;
+export const customEmoteId = (ref: string): string | null => {
+  const id = ref.startsWith(CUSTOM_PREFIX) ? ref.slice(CUSTOM_PREFIX.length) : null;
+  return id && UUID.test(id) ? id : null;
+};
+
 export const isEmote = (slug: unknown): slug is string => typeof slug === "string" && EMOTES.some((e) => e.slug === slug);
 export const emoteLabel = (slug: string) => STUDY_MEANING[slug] ?? EMOTES.find((e) => e.slug === slug)?.name ?? slug;
 export const emoteStillUrl = (slug: string) => `/lol/emotes/${slug}.png`;
 export const emoteAnimUrl = (slug: string) => `/lol/emotes/${slug}.webp`;
 export const emoteSoundUrl = (slug: string) => `/lol/emotes/${slug}.ogg`;
+
+export type EmoteView = { ref: string; label: string; still: string; anim: string; sound: string | null; custom: boolean };
+
+/** Ce qu'il faut pour afficher une émote (LoL ou importée). Null si elle n'existe pas (ou plus). */
+export function emoteView(ref: string, customs: readonly CustomEmote[]): EmoteView | null {
+  if (isEmote(ref)) {
+    return { ref, label: emoteLabel(ref), still: emoteStillUrl(ref), anim: emoteAnimUrl(ref), sound: emoteSoundUrl(ref), custom: false };
+  }
+  const id = customEmoteId(ref);
+  const custom = id ? customs.find((c) => c.id === id) : undefined;
+  if (!custom) return null;
+  // Une image importée peut être animée (GIF, WebP) : la même sert d'image fixe et d'animation
+  const image = `/api/emotes/${custom.id}/image`;
+  return { ref, label: custom.name, still: image, anim: image, sound: custom.hasSound ? `/api/emotes/${custom.id}/sound` : null, custom: true };
+}
