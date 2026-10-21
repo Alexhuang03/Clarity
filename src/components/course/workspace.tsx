@@ -11,6 +11,8 @@ import { CourseColumns } from "./layout";
 import { OutlineButton } from "./outline-button";
 import { DocumentsPanel } from "./documents-panel";
 import { Markdown } from "./markdown";
+import { AnnotationLayer } from "@/components/annotations/annotation-layer";
+import type { AnnotationRow } from "@/lib/annotations/types";
 import { ThinkingPanel } from "./thinking-panel";
 
 type Streaming = { kind: "summary" | "chat"; partId?: string; content: string; thinking: string } | null;
@@ -56,12 +58,15 @@ export const MessageItem = memo(function MessageItem({
     <article>
       <AssistantHeader kind={message.kind} partTitle={partTitle} />
       {message.thinking && <ThinkingPanel text={message.thinking} durationMs={message.thinking_ms} />}
-      <Markdown
-        content={message.content}
-        sources={message.sources}
-        variant={message.kind === "summary" ? "summary" : "chat"}
-        messageId={message.id}
-      />
+      {/* Zone annotable : son texte sert de référence aux surlignages et questions */}
+      <div data-annotatable={message.id}>
+        <Markdown
+          content={message.content}
+          sources={message.sources}
+          variant={message.kind === "summary" ? "summary" : "chat"}
+          messageId={message.id}
+        />
+      </div>
     </article>
   );
 });
@@ -141,12 +146,14 @@ export function Workspace({
   initialDocuments,
   initialParts,
   initialMessages,
+  initialAnnotations,
 }: {
   course: CourseRow;
   userId: string;
   initialDocuments: DocumentRow[];
   initialParts: PartRow[];
   initialMessages: MessageRow[];
+  initialAnnotations: AnnotationRow[];
 }) {
   const [supabase] = useState(createClient);
   const [documents, setDocuments] = useState(initialDocuments);
@@ -306,9 +313,13 @@ export function Workspace({
             </p>
           )}
 
-          {messages.map((message) => (
-            <MessageItem key={message.id} message={message} partTitle={partTitle(message.part_id)} />
-          ))}
+          <AnnotationLayer initialAnnotations={initialAnnotations} version={messages.length}>
+            <div className="space-y-10">
+              {messages.map((message) => (
+                <MessageItem key={message.id} message={message} partTitle={partTitle(message.part_id)} />
+              ))}
+            </div>
+          </AnnotationLayer>
 
           {streaming && (
             <article aria-live="polite">

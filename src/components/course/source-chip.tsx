@@ -30,6 +30,7 @@ export function CitationPill({ source, number }: { source: Source; number: numbe
       onClick={openable ? () => openSource(source) : undefined}
       title={`${sourceLabel(source)}${source.section ? ` — ${source.section}` : ""}\n\n${source.excerpt}…`}
       aria-label={`Source ${number} : ${sourceLabel(source)}`}
+      data-annot-ignore
       className="mx-px inline-flex h-[1.15rem] min-w-[1.15rem] -translate-y-px items-center justify-center rounded-full bg-indigo-500/15 px-1 align-middle text-[0.65rem] font-semibold leading-none text-indigo-700 no-underline transition hover:bg-indigo-500 hover:text-white dark:text-indigo-300"
     >
       {number}
@@ -44,7 +45,7 @@ export function SourcesList({ sources }: { sources: { source: Source; number: nu
   if (sources.length === 0) return null;
   const visible = open ? sources : sources.slice(0, 4);
   return (
-    <div className="mt-6 border-t border-black/10 pt-4 dark:border-white/10">
+    <div data-annot-ignore className="mt-6 border-t border-black/10 pt-4 dark:border-white/10">
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide opacity-50">Sources</p>
       <ul className="grid gap-1.5 sm:grid-cols-2">
         {visible.map(({ source, number }) => (

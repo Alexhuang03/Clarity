@@ -23,7 +23,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="fr"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        {/* Mention exigée par Riot Games pour les projets de fans (pings et émotes, voir THIRD_PARTY_NOTICES.md) */}
+        <footer className="px-4 pb-4 pt-8 text-center text-[0.65rem] leading-relaxed opacity-40">
+          Icônes de pings, sons et émotes © Riot Games, Inc., via le projet lolPing. Clarity n&apos;est pas approuvé par
+          Riot Games et ne reflète pas les opinions de Riot Games.
+        </footer>
+      </body>
     </html>
   );
 }

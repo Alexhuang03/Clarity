@@ -34,3 +34,52 @@ body {
   overflow-y: hidden;
   padding: 0.25rem 0;
 }
+
+/* Styles des annotations (::highlight) : injectés par annotation-layer.tsx, car la compilation
+   CSS de Tailwind supprime ce sélecteur récent. Ici, seulement les animations de la roue. */
+@keyframes wheel-in {
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes ping-ring {
+  from { opacity: 0.9; transform: scale(0.4); }
+  to { opacity: 0; transform: scale(1.6); }
+}
+@keyframes ping-pop {
+  0% { opacity: 0; transform: scale(0.3); }
+  25% { opacity: 1; transform: scale(1.15); }
+  70% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.9) translateY(-6px); }
+}
+
+/* ---------- Ping et émote à l'endroit annoté (animations reprises de lolPing, licence MIT) ---------- */
+.lol-ping { position: fixed; width: 0; height: 0; pointer-events: none; z-index: 60; --size: 64px; --dur: 1.8s; }
+.lol-ping .ground {
+  position: absolute; left: calc(var(--size) * -0.42); top: calc(var(--size) * 0.2);
+  width: calc(var(--size) * 0.84); height: calc(var(--size) * 0.24); border-radius: 50%;
+  background: radial-gradient(closest-side, var(--c), transparent); opacity: 0; animation: lol-ground var(--dur) ease-out forwards;
+}
+.lol-ping .ring {
+  position: absolute; left: calc(var(--size) * -0.545); top: calc(var(--size) * -0.545);
+  width: calc(var(--size) * 1.09); height: calc(var(--size) * 1.09); box-sizing: border-box; border-radius: 50%;
+  border: 3px solid var(--c); box-shadow: 0 0 18px var(--c), inset 0 0 12px var(--c); opacity: 0; animation: lol-ring .65s ease-out forwards;
+}
+.lol-ping .ring.r2 { animation-delay: .22s; }
+.lol-ping .art {
+  position: absolute; left: calc(var(--size) * -0.5); top: calc(var(--size) * -0.73);
+  width: var(--size); height: var(--size); animation: lol-life var(--dur) linear forwards;
+}
+.lol-ping .art img { position: absolute; inset: 0; width: 100%; height: 100%; filter: drop-shadow(0 0 10px var(--c)); }
+.lol-ping .pop { position: absolute; inset: 0; animation: lol-pop .28s cubic-bezier(.2,1.6,.4,1) both, lol-bob 1.6s ease-in-out .3s infinite; }
+.lol-emote { position: fixed; width: 0; height: 0; pointer-events: none; z-index: 60; --size: 120px; }
+.lol-emote img {
+  /* Le preflight de Tailwind limite les images à la largeur du parent, ici un point d'ancrage de 0 px */
+  max-width: none;
+  position: absolute; left: calc(var(--size) * -0.625); top: calc(var(--size) * -1.1);
+  width: calc(var(--size) * 1.25); height: calc(var(--size) * 1.25); animation: lol-life 2.6s linear forwards;
+}
+@keyframes lol-pop { 0% { transform: scale(.4); opacity: 0 } 60% { transform: scale(1.15); opacity: 1 } 100% { transform: scale(1) } }
+@keyframes lol-bob { 0%, 100% { translate: 0 0 } 50% { translate: 0 -5px } }
+@keyframes lol-ring { 0% { transform: scale(.25); opacity: .95 } 100% { transform: scale(1.35); opacity: 0 } }
+@keyframes lol-ground { 0% { opacity: 0 } 10% { opacity: .75 } 85% { opacity: .55 } 100% { opacity: 0 } }
+@keyframes lol-life { 0%, 87% { opacity: 1 } 100% { opacity: 0 } }

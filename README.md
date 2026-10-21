@@ -34,5 +34,12 @@ npm run dev
   (formules en LaTeX, schémas décrits), découpage en extraits citables, embeddings
 - [x] Étape 3 : couche IA multi-fournisseurs avec bascule automatique, plan des cours longs, résumé « débutant »
   par partie avec sources vérifiées et corrigés repliables, questions dans la conversation (recherche sémantique)
-- [ ] Étape 4 : sélection → menu (surligner / question / ce que j'ai compris), bulles latérales, panneau mobile
+- [ ] Étape 4 : annotations
+  - [x] 4a. Roue de pings LoL (clic droit maintenu + glisser, Alt + glisser, ou sélection) : surligner (4 couleurs),
+    poser une question, ce que j'ai compris, signaler une erreur — vraies icônes et sons de pings ;
+    roue d'émotes (Ctrl + glisser) pour réagir à un passage, autocollants dans la marge ;
+    marques ancrées au texte (API CSS Custom Highlight). Assets de lolPing / Riot Games : voir THIRD_PARTY_NOTICES.md
+  - [ ] 4b. Bulles de discussion dans les marges, réponses de l'IA, revérification des erreurs signalées
+  - [ ] 4c. Personnalisation des roues dans « Mon compte » (pings, émotes, import d'images et de sons, volume)
+  - [ ] 4d. Mobile (panneau du bas) et annotations qui se chevauchent
 - [ ] Étape 5 : statut « compris », réglages des modèles, rendu maths (KaTeX) et schémas (Mermaid)
