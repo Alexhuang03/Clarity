@@ -1,11 +1,10 @@
 "use server";
 
-import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
 import { analyzeCourse as runAnalysis } from "@/lib/course/analyze";
-import { processDocument } from "@/lib/ingest/pipeline";
+import { enqueueDocument } from "@/lib/ingest/queue";
 import { createClient } from "@/lib/supabase/server";
 
 export async function createCourse(
@@ -121,8 +120,9 @@ export async function registerDocument(input: {
     .single();
   if (error || !doc) return { error: "Impossible d'enregistrer le fichier." };
 
-  // Le traitement (lecture par l'IA, embeddings) peut prendre plusieurs minutes
-  after(() => processDocument(doc.id));
+  // Le traitement (lecture par l'IA, embeddings) peut prendre plusieurs minutes : il passe par la
+  // file d'attente (un document à la fois) et continue après la réponse au navigateur
+  enqueueDocument(doc.id);
   return { document: doc };
 }
 
@@ -133,7 +133,7 @@ export async function retryDocument(documentId: string) {
   const { data: doc } = await supabase.from("documents").select("id").eq("id", documentId).maybeSingle();
   if (!doc) return;
   await supabase.from("documents").update({ status: "uploaded", progress: 0, error: null }).eq("id", doc.id);
-  after(() => processDocument(doc.id));
+  enqueueDocument(doc.id);
 }
 
 export async function deleteDocument(documentId: string) {
