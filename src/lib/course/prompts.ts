@@ -90,10 +90,12 @@ const APP_GUIDE = `FONCTIONNALITÉS DE CLARITY
 - Chaque explication cite ses sources (pastilles numérotées) : un clic ouvre le document original à la bonne page.
 - Les corrigés d'exercices sont repliés (« Voir le corrigé »).
 - Poser des questions sur le cours dans la barre en bas ; voir la réflexion du modèle (panneau « Réflexion »).
-- Compte : connexion par email et mot de passe, mot de passe oublié, page « Mon compte » (changer le mot de passe, supprimer le compte).
+- Annoter une réponse de l'IA : sélectionner un passage (ou clic droit maintenu, ou Alt + glisser) ouvre une roue façon League of Legends pour surligner (4 couleurs), poser une question sur le passage, écrire ce qu'on a compris ou signaler une erreur de l'IA. Ctrl + glisser ouvre une roue d'émotes pour réagir à un passage.
+- Compte : connexion par email et mot de passe, mot de passe oublié, page « Mon compte » (changer le mot de passe, choisir le ping de chaque action et les 8 émotes de la roue, importer ses propres émotes avec un son, régler ou couper le son, supprimer le compte).
 
 PAS ENCORE DISPONIBLE (bientôt)
-- Sélectionner un passage du résumé pour le surligner, poser une question dans la marge ou noter ce qu'on a compris.
+- Réponse de l'IA dans la marge aux questions posées sur un passage, et revérification des erreurs signalées.
+- Affichage adapté au mobile des annotations (panneau en bas de l'écran).
 - Exporter un résumé en PDF ou télécharger un fichier : pas encore possible. En attendant, on peut imprimer la page du navigateur en PDF (Ctrl+P puis « Enregistrer au format PDF »).
 - Accès à internet, à la météo ou à l'actualité : jamais (Clarity ne travaille que sur tes cours).`;
 

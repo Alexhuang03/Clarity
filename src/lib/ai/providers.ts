@@ -9,6 +9,10 @@ export type ChatRequest = {
   maxTokens?: number;
   temperature?: number;
   json?: boolean;
+  /** Petite tâche (classement, JSON) : réflexion minimale, réponse en ~1 s au lieu de plusieurs */
+  fast?: boolean;
+  /** Annule la requête (délai maximal) */
+  signal?: AbortSignal;
 };
 
 /** Erreur après laquelle il vaut la peine d'essayer un autre modèle (quota, surcharge, contexte trop long). */
@@ -67,11 +71,13 @@ async function* streamGemini(model: string, req: ChatRequest): AsyncGenerator<St
         generationConfig: {
           maxOutputTokens: req.maxTokens ?? 8192,
           temperature: req.temperature ?? 0.4,
-          // Gemini renvoie alors un résumé de sa réflexion (parties marquées "thought")
-          thinkingConfig: { includeThoughts: true },
+          // Gemini renvoie alors un résumé de sa réflexion (parties marquées "thought").
+          // Petite tâche : réflexion minimale, sinon le modèle « léger » réfléchit plusieurs secondes.
+          thinkingConfig: req.fast ? { thinkingLevel: "minimal" } : { includeThoughts: true },
           ...(req.json ? { responseMimeType: "application/json" } : {}),
         },
       }),
+      signal: req.signal,
     },
   );
   await check(res, model);
@@ -103,7 +109,10 @@ async function* streamOpenAICompatible(
       temperature: req.temperature ?? 0.4,
       messages: [{ role: "system", content: req.system }, ...req.messages],
       ...(req.json ? { response_format: { type: "json_object" } } : {}),
+      // Modèles de raisonnement (gpt-oss) : effort minimal pour les petites tâches
+      ...(req.fast && /gpt-oss/.test(model) ? { reasoning_effort: "low" } : {}),
     }),
+    signal: req.signal,
   });
   await check(res, model);
   for await (const data of sseData(res)) {
@@ -153,6 +162,8 @@ export async function* streamWithFallback(
       if (started) throw error;
       // Même une erreur non temporaire (clé invalide...) peut ne concerner qu'un fournisseur
       lastError = error;
+      // Délai dépassé : inutile d'essayer les modèles suivants avec un signal déjà annulé
+      if (req.signal?.aborted) throw error;
       console.warn(`[ia] ${model} indisponible, modèle suivant`, (error as Error).message);
     }
   }

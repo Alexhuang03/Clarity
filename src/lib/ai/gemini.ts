@@ -10,7 +10,11 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * timeoutMs : sans limite, une requête que Gemini ne termine jamais bloquerait le document
  * pendant des dizaines de minutes (5 min d'attente par défaut dans Node, à chaque tentative).
  */
-async function geminiFetch(url: string, body: unknown, { attempts = 3, timeoutMs = 120_000 } = {}): Promise<unknown> {
+async function geminiFetch(
+  url: string,
+  body: unknown,
+  { attempts = 3, timeoutMs = 120_000, maxWaitMs = Infinity } = {},
+): Promise<unknown> {
   for (let attempt = 1; ; attempt++) {
     let res: Response;
     try {
@@ -37,6 +41,10 @@ async function geminiFetch(url: string, body: unknown, { attempts = 3, timeoutMs
     // Gemini indique le délai à respecter quand le quota par minute est atteint ("retryDelay": "17s")
     const hinted = Number(text.match(/"retryDelay":\s*"(\d+)(?:\.\d+)?s"/)?.[1]);
     const wait = (hinted || 5 * attempt) + 1;
+    // Quelqu'un attend la réponse (question du chat) : pas de longue pause, on abandonne
+    if (wait * 1000 > maxWaitMs) {
+      throw new ProviderError(`Gemini HTTP ${res.status} (attente de ${wait} s refusée)`, res.status, true);
+    }
     console.warn(`[gemini] HTTP ${res.status}, nouvelle tentative dans ${wait} s (${attempt + 1}/${attempts})`);
     await sleep(wait * 1000);
   }
@@ -65,7 +73,8 @@ export async function embed(
           outputDimensionality: EMBEDDING_DIMENSIONS,
         })),
       },
-      { attempts: 5, timeoutMs: 60_000 },
+      // Question du chat : quelqu'un attend, réponse rapide ou abandon. Import : on patiente (quota par minute).
+      taskType === "RETRIEVAL_QUERY" ? { attempts: 2, timeoutMs: 8_000, maxWaitMs: 3_000 } : { attempts: 5, timeoutMs: 60_000 },
     )) as { embeddings: { values: number[] }[] };
     vectors.push(...data.embeddings.map((e) => e.values));
   }

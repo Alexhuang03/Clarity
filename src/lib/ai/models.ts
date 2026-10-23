@@ -11,12 +11,15 @@ export const EMBEDDING_DIMENSIONS = 768;
 export const VISION_MODEL = "gemini-flash-latest";
 
 // Chaînes de secours : si un modèle échoue (quota, surcharge), on passe au suivant.
-const CHAINS: Record<"summary" | "chat" | "light", ModelId[]> = {
+const CHAINS: Record<"summary" | "chat" | "light" | "analysis", ModelId[]> = {
   // Résumés : gros contexte et bonne qualité d'explication
   summary: ["gemini:gemini-flash-latest", "gemini:gemini-flash-lite-latest", "groq:openai/gpt-oss-120b"],
   // Questions : rapidité d'abord
   chat: ["groq:openai/gpt-oss-120b", "gemini:gemini-flash-latest", "gemini:gemini-flash-lite-latest"],
-  // Petites tâches (titres des parties...)
+  // Analyse de chaque question du chat : quelqu'un attend, la vitesse prime.
+  // Mesuré (oct. 2026) : Groq gpt-oss-20b 0,2-0,5 s, Gemini Flash-Lite gratuit 7-16 s.
+  analysis: ["groq:openai/gpt-oss-20b", "groq:openai/gpt-oss-120b", "gemini:gemini-flash-lite-latest"],
+  // Petites tâches sans urgence (titres des parties...)
   light: ["gemini:gemini-flash-lite-latest", "groq:openai/gpt-oss-20b", "gemini:gemini-flash-latest"],
 };
 
