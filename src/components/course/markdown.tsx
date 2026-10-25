@@ -181,7 +181,8 @@ export function Markdown({
 }: {
   content: string;
   sources?: Source[];
-  variant?: "summary" | "chat";
+  /** bubble : bulle de marge, texte compact et sans liste des sources (les pastilles suffisent) */
+  variant?: "summary" | "chat" | "bubble";
   /** Message enregistré : ses titres reçoivent des ids stables, repris par le sommaire de la page */
   messageId?: string;
 }) {
@@ -217,6 +218,14 @@ export function Markdown({
     );
   }
 
+  if (variant === "bubble") {
+    return (
+      <div className={BUBBLE_PROSE}>
+        <Blocks text={text} ctx={ctx} headingBase={0} />
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className={PROSE}>
@@ -226,3 +235,9 @@ export function Markdown({
     </div>
   );
 }
+
+const BUBBLE_PROSE = [
+  "prose prose-sm prose-neutral max-w-none dark:prose-invert",
+  "prose-p:my-2 prose-p:leading-6 prose-li:my-0.5 prose-ul:my-2 prose-ol:my-2 prose-ul:pl-4 prose-ol:pl-4",
+  "prose-h3:mt-3 prose-h3:mb-1 prose-h3:text-sm prose-strong:font-semibold [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+].join(" ");

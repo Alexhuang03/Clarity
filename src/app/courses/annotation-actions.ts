@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 
 const KINDS: AnnotationKind[] = ["highlight", "question", "understanding", "error", "reaction"];
 const NOTE_MAX = 4000;
-const SELECT = "id, message_id, kind, color, anchor, note, emote, status, created_at, thread_messages(id, role, content, created_at)";
+const SELECT = "id, message_id, kind, color, anchor, note, emote, status, verdict, created_at, thread_messages(id, role, content, sources, created_at)";
 
 function validAnchor(a: Anchor): Anchor | null {
   if (!a || typeof a.quote !== "string" || !a.quote.trim() || a.quote.length > 5000) return null;
@@ -96,4 +96,12 @@ export async function deleteAnnotation(annotationId: string) {
   const supabase = await createClient();
   // Le fil de discussion est supprimé en cascade
   await supabase.from("annotations").delete().eq("id", annotationId);
+}
+
+/** « J'ai compris » (question), « traité » (erreur signalée), ou rouvert. */
+export async function setAnnotationStatus(annotationId: string, status: AnnotationRow["status"]) {
+  await getCurrentUser();
+  if (!["open", "understood", "resolved"].includes(status)) return;
+  const supabase = await createClient();
+  await supabase.from("annotations").update({ status }).eq("id", annotationId).in("kind", ["question", "understanding", "error"]);
 }

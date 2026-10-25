@@ -39,8 +39,13 @@ npm run dev
     poser une question, ce que j'ai compris, signaler une erreur — vraies icônes et sons de pings ;
     roue d'émotes (Ctrl + glisser) pour réagir à un passage, autocollants dans la marge ;
     marques ancrées au texte (API CSS Custom Highlight). Assets de lolPing / Riot Games : voir THIRD_PARTY_NOTICES.md
-  - [ ] 4b. Bulles de discussion dans les marges, réponses de l'IA, revérification des erreurs signalées
+  - [x] 4b. Bulles dans la marge (façon Google Docs) : l'IA répond aux questions sur un passage, revérifie
+    les erreurs signalées (verdict), évalue « ce que j'ai compris » ; discussion suivie, « compris » / « traité »
   - [x] 4c. Personnalisation dans « Mon compte » : ping de chaque action (12 pings), 8 émotes de la roue,
     émotes importées (image + son, 30 max), volume et son coupé (aussi depuis la roue)
   - [ ] 4d. Mobile (panneau du bas) et annotations qui se chevauchent
-- [ ] Étape 5 : statut « compris », réglages des modèles, rendu maths (KaTeX) et schémas (Mermaid)
+- [ ] Étape 5 : fiches de révision par notion (approche hybride « LLM Wiki » + RAG)
+  - [ ] 5a. Fiche par notion clé créée à l'analyse du cours (définition, formule, exemple, pièges), chaque phrase sourcée [S#]
+  - [ ] 5b. Le chat consulte d'abord la fiche de la notion, puis le RAG pour les citations précises
+  - [ ] 5c. Fiches enrichies par les annotations : ce que tu as compris, tes questions, les erreurs revérifiées
+- [ ] Étape 6 : réglages des modèles, schémas (Mermaid), déploiement sur le Raspberry Pi

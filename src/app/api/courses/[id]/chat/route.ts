@@ -1,9 +1,9 @@
-import { embed } from "@/lib/ai/gemini";
 import { modelChain } from "@/lib/ai/models";
 import type { ChatMessage } from "@/lib/ai/providers";
 import { loadCourseContext } from "@/lib/course/context";
 import { applicationPrompt, chatPrompt, greetingPrompt, offTopicPrompt } from "@/lib/course/prompts";
-import { finalizeCitations, formatSources, numberSources, type SourceChunk } from "@/lib/course/sources";
+import { searchCourse as searchInCourse } from "@/lib/course/retrieve";
+import { finalizeCitations, formatSources, numberSources } from "@/lib/course/sources";
 import { ndjsonResponse, streamAnswer } from "@/lib/course/stream";
 import { changesMeaning, quickUnderstanding, understandQuestion, type Intent } from "@/lib/course/understand";
 import { createClient } from "@/lib/supabase/server";
@@ -14,8 +14,6 @@ const MAX_QUESTION = 4000;
 const HISTORY = 6;
 const HISTORY_MESSAGE_MAX = 1500;
 const MAX_SOURCES = 6;
-// Un extrait nettement moins proche de la question que le meilleur n'apporte que du bruit
-const SIMILARITY_MARGIN = 0.12;
 
 const INTENT_LABEL: Record<Intent, string> = {
   cours: "question sur le cours",
@@ -66,19 +64,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     send({ type: "done", message: userMessage });
 
     const t0 = Date.now();
-    // Extraits du cours les plus proches d'un texte, sans ceux nettement moins pertinents que le meilleur
-    const searchCourse = async (text: string) => {
-      const [query] = await embed([text], "RETRIEVAL_QUERY");
-      const { data: matches, error } = await supabase.rpc("match_chunks", {
-        p_course_id: courseId,
-        p_query_embedding: JSON.stringify(query),
-        p_match_count: MAX_SOURCES,
-      });
-      if (error) throw error;
-      const found = (matches ?? []) as (SourceChunk & { similarity: number })[];
-      const best = found[0]?.similarity ?? 0;
-      return found.filter((c) => c.similarity >= best - SIMILARITY_MARGIN);
-    };
+    const searchCourse = (text: string) => searchInCourse(supabase, courseId, text, MAX_SOURCES);
 
     // 1. Compréhension de la question : catégorie + reformulation autonome.
     // Une simple politesse (« merci », « bonjour ») est reconnue sans appeler l'IA.

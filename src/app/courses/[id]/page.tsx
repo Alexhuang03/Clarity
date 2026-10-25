@@ -41,7 +41,7 @@ async function CourseContent({ params }: { params: Promise<{ id: string }> }) {
     supabase
       .from("annotations")
       .select(
-        "id, message_id, kind, color, anchor, note, emote, status, created_at, thread_messages(id, role, content, created_at), messages!inner(course_id)",
+        "id, message_id, kind, color, anchor, note, emote, status, verdict, created_at, thread_messages(id, role, content, sources, created_at), messages!inner(course_id)",
       )
       .eq("messages.course_id", id)
       .order("created_at"),

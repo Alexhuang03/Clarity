@@ -91,10 +91,11 @@ const APP_GUIDE = `FONCTIONNALITÉS DE CLARITY
 - Les corrigés d'exercices sont repliés (« Voir le corrigé »).
 - Poser des questions sur le cours dans la barre en bas ; voir la réflexion du modèle (panneau « Réflexion »).
 - Annoter une réponse de l'IA : sélectionner un passage (ou clic droit maintenu, ou Alt + glisser) ouvre une roue façon League of Legends pour surligner (4 couleurs), poser une question sur le passage, écrire ce qu'on a compris ou signaler une erreur de l'IA. Ctrl + glisser ouvre une roue d'émotes pour réagir à un passage.
+- Bulles dans la marge (comme les commentaires de Google Docs) : l'IA répond à une question posée sur un passage, revérifie un passage signalé comme faux (verdict : erreur confirmée, imprécis ou correct) et évalue « ce que j'ai compris » (bien compris, presque, à revoir). On peut poursuivre la discussion dans la bulle, marquer une question comme comprise ou une erreur comme traitée.
 - Compte : connexion par email et mot de passe, mot de passe oublié, page « Mon compte » (changer le mot de passe, choisir le ping de chaque action et les 8 émotes de la roue, importer ses propres émotes avec un son, régler ou couper le son, supprimer le compte).
 
 PAS ENCORE DISPONIBLE (bientôt)
-- Réponse de l'IA dans la marge aux questions posées sur un passage, et revérification des erreurs signalées.
+- Fiches de révision par notion, enrichies par les annotations.
 - Affichage adapté au mobile des annotations (panneau en bas de l'écran).
 - Exporter un résumé en PDF ou télécharger un fichier : pas encore possible. En attendant, on peut imprimer la page du navigateur en PDF (Ctrl+P puis « Enregistrer au format PDF »).
 - Accès à internet, à la météo ou à l'actualité : jamais (Clarity ne travaille que sur tes cours).`;
@@ -122,4 +123,55 @@ export function greetingPrompt(courseTitle: string) {
   return `Tu es Clarity, un assistant de révision. L'étudiant te salue ou te remercie.
 Réponds brièvement et chaleureusement, puis propose une piste pour avancer sur le cours « ${courseTitle} » (poser une question sur une notion, s'entraîner sur un exercice...).
 ${SHORT_RULES}`;
+}
+
+// ---------- Bulles de marge (annotations) ----------
+
+const BUBBLE_TASK: Record<"question" | "understanding" | "error", string> = {
+  question: `L'étudiant a sélectionné un PASSAGE d'une explication que tu lui as donnée et pose une question dessus.
+Réponds UNIQUEMENT à sa question, à propos de ce passage. Commence par la réponse directe en une phrase, puis explique.
+Appuie-toi sur les sources ; si la réponse n'y est pas, dis-le puis réponds avec tes connaissances en le signalant par « (hors de ton cours) ».`,
+  understanding: `L'étudiant reformule avec ses propres mots ce qu'il a compris du PASSAGE. Évalue sa compréhension avec bienveillance mais sans complaisance.
+La TOUTE PREMIÈRE ligne de ta réponse est exactement l'une de celles-ci, seule sur sa ligne :
+VERDICT: CORRECT   (il a bien compris l'essentiel)
+VERDICT: PARTIEL   (il manque quelque chose d'important, ou une petite confusion)
+VERDICT: FAUX      (contresens)
+Puis : ce qui est juste dans sa reformulation (une phrase), ce qui manque ou est faux et la correction, avec citations.`,
+  error: `L'étudiant signale que le PASSAGE, que tu as écrit plus tôt, est peut-être faux. Revérifie-le rigoureusement en comparant avec les SOURCES, qui font foi, puis avec tes connaissances.
+Ce passage a été écrit par une IA : il peut réellement contenir une erreur, ne le défends pas par principe.
+La TOUTE PREMIÈRE ligne de ta réponse est exactement l'une de celles-ci, seule sur sa ligne :
+VERDICT: FAUX      (le passage contient une erreur)
+VERDICT: PARTIEL   (imprécis, incomplet ou ambigu)
+VERDICT: CORRECT   (le passage est juste)
+Puis : si FAUX ou PARTIEL, ce qu'il fallait dire, clairement, avec citations ; si CORRECT, pourquoi c'est juste et d'où peut venir le doute.`,
+};
+
+/** Consigne d'une bulle de marge : la tâche, puis le passage, son contexte et les sources. */
+export function bubblePrompt(
+  kind: "question" | "understanding" | "error",
+  level: Level,
+  material: { quote: string; context: string; sources: string },
+) {
+  return `${COMMON}
+
+NIVEAU
+${LEVELS[level]}
+
+TÂCHE
+${BUBBLE_TASK[kind]}
+
+FORMAT DE LA BULLE
+Ta réponse s'affiche dans une petite bulle à côté du texte : 120 mots maximum, pas de titre, paragraphes très courts.
+Si l'étudiant poursuit la discussion, réponds à son dernier message.${
+    kind === "question" ? "" : " Ne remets une ligne VERDICT que si ton jugement change."
+  }
+
+PASSAGE SÉLECTIONNÉ
+« ${material.quote} »
+
+CONTEXTE (ta réponse précédente, autour du passage)
+${material.context}
+
+SOURCES
+${material.sources || "(aucun extrait pertinent dans le cours)"}`;
 }

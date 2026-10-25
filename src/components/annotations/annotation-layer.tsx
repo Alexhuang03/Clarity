@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { anchorFromRange, buildTextIndex, rangeFromAnchor, type Anchor } from "@/lib/annotations/anchor";
-import { HIGHLIGHT_COLORS, HIGHLIGHT_SWATCH, type AnnotationRow, type HighlightColor } from "@/lib/annotations/types";
+import { HIGHLIGHT_COLORS, HIGHLIGHT_SWATCH, isThreadKind, type AnnotationRow, type HighlightColor } from "@/lib/annotations/types";
 import {
   emoteView,
   pingById,
@@ -17,8 +17,9 @@ import {
 } from "@/lib/annotations/lol";
 import type { LolPrefs } from "@/lib/annotations/prefs";
 import { playSound, setVolume } from "@/lib/annotations/sound";
-import { createAnnotation, deleteAnnotation, updateHighlightColor } from "@/app/courses/annotation-actions";
+import { createAnnotation, deleteAnnotation, setAnnotationStatus, updateHighlightColor } from "@/app/courses/annotation-actions";
 import { saveLolPrefs } from "@/app/account/lol-actions";
+import { KIND_LABEL, MarginBubble, ThreadView, useThreadRunner, type Actions, type Pending } from "./threads";
 import { buildPingItems, EmoteFx, hitTest, PING_LABELS, PING_ORDER, PingFx, preloadEmote, Wheel, type WheelHit, type WheelItem } from "./wheel";
 
 type Target = { messageId: string; anchor: Anchor; rect: DOMRect };
@@ -52,6 +53,11 @@ const DRAG_THRESHOLD = 36;
 const KEY_MOVE_THRESHOLD = 8;
 const HIGHLIGHT_SLICE = PING_ORDER.indexOf("highlight");
 const COLOR_KEY = "clarity-highlight-color";
+// Bulles de discussion dans la marge de droite (après la colonne des autocollants d'émotes)
+const BUBBLE_OFFSET = 48;
+const BUBBLE_MIN = 220;
+const BUBBLE_MAX = 300;
+const BUBBLE_GAP = 8;
 const noSubscription = () => () => {};
 
 function readPref<T extends string>(key: string, fallback: T, allowed?: readonly T[]): T {
@@ -134,14 +140,6 @@ const COMPOSER_TEXT: Record<Composer["kind"], { placeholder: string; hint: strin
   },
 };
 
-const KIND_LABEL: Record<AnnotationRow["kind"], string> = {
-  highlight: "Surlignage",
-  question: "Question",
-  understanding: "Ce que j'ai compris",
-  error: "Erreur signalée",
-  reaction: "Réaction",
-};
-
 /**
  * Couche d'annotation des réponses de l'IA, façon lolPing :
  * - roue de pings : clic droit maintenu sur une sélection, ou Alt maintenu + glisser
@@ -183,6 +181,15 @@ export function AnnotationLayer({
   const pointer = useRef({ x: 0, y: 0 });
   const armed = useRef<{ kind: WheelKind; trigger: "alt" | "ctrl"; x: number; y: number } | null>(null);
   const [layoutTick, setLayoutTick] = useState(0);
+  // Bulle de discussion ouverte dans la marge
+  const [activeThread, setActiveThread] = useState<string | null>(null);
+  const activeRef = useRef<string | null>(null);
+  const marginRef = useRef<HTMLDivElement>(null);
+  const marginOn = useRef(false);
+  const anchorTops = useRef(new Map<string, number>());
+  const bubbleEls = useRef(new Map<string, HTMLDivElement>());
+  const bubbleObserver = useRef<ResizeObserver | null>(null);
+  const { pending, run } = useThreadRunner(setAnnotations);
   // Côté serveur on suppose le navigateur compatible (sinon le bandeau d'avertissement
   // apparaîtrait au rendu serveur puis disparaîtrait : écart d'hydratation)
   const supported = useSyncExternalStore(noSubscription, () => "highlights" in CSS, () => true);
@@ -205,8 +212,74 @@ export function AnnotationLayer({
   );
   const items = wheel?.kind === "emote" ? emoteItems : pingItems;
 
+  /**
+   * Place les bulles dans la marge, chacune à hauteur de son passage, sans chevauchement
+   * (comme les commentaires de Google Docs : la bulle ouverte est alignée sur son passage,
+   * les autres s'écartent au-dessus et en dessous). Sans place à droite, les fils s'ouvrent en fenêtre.
+   */
+  const placeBubbles = useCallback(() => {
+    const root = container.current;
+    const layer = marginRef.current;
+    if (!root || !layer) return;
+    const box = root.getBoundingClientRect();
+    const room = window.innerWidth - box.right - BUBBLE_OFFSET - 16;
+    marginOn.current = room >= BUBBLE_MIN;
+    layer.style.display = marginOn.current ? "block" : "none";
+    if (!marginOn.current) return;
+    layer.style.left = `${box.width + BUBBLE_OFFSET}px`;
+    layer.style.width = `${Math.min(BUBBLE_MAX, room)}px`;
+
+    const items = [...bubbleEls.current].flatMap(([id, el]) => {
+      const want = anchorTops.current.get(id);
+      if (want === undefined) {
+        el.style.visibility = "hidden";
+        return [];
+      }
+      return [{ id, el, want, height: el.offsetHeight }];
+    });
+    items.sort((a, b) => a.want - b.want);
+    const tops = new Map<string, number>();
+    const pivot = Math.max(0, items.findIndex((i) => i.id === activeRef.current));
+    if (items.length) {
+      const anchored = activeRef.current && items[pivot].id === activeRef.current;
+      tops.set(items[pivot].id, items[pivot].want);
+      let bottom = items[pivot].want + items[pivot].height;
+      for (let k = pivot + 1; k < items.length; k++) {
+        const top = Math.max(items[k].want, bottom + BUBBLE_GAP);
+        tops.set(items[k].id, top);
+        bottom = top + items[k].height;
+      }
+      // Bulle ouverte : celles du dessus remontent pour lui laisser la place
+      let ceiling = items[pivot].want;
+      for (let k = pivot - 1; k >= 0 && anchored; k--) {
+        const top = Math.min(items[k].want, ceiling - BUBBLE_GAP - items[k].height);
+        tops.set(items[k].id, top);
+        ceiling = top;
+      }
+    }
+    for (const item of items) {
+      item.el.style.top = `${tops.get(item.id)}px`;
+      item.el.style.visibility = "visible";
+    }
+  }, []);
+
+  const registerBubble = useCallback(
+    (id: string, el: HTMLDivElement | null) => {
+      bubbleObserver.current ??= new ResizeObserver(() => placeBubbles());
+      const previous = bubbleEls.current.get(id);
+      if (previous) bubbleObserver.current.unobserve(previous);
+      if (el) {
+        bubbleEls.current.set(id, el);
+        bubbleObserver.current.observe(el);
+      } else bubbleEls.current.delete(id);
+    },
+    [placeBubbles],
+  );
+  useEffect(() => () => bubbleObserver.current?.disconnect(), []);
+
   // ---- Dessin des marques et placement des autocollants d'émotes ----
   useLayoutEffect(() => {
+    activeRef.current = activeThread;
     if (!supported || !container.current) return;
     const groups = new Map<string, Range[]>();
     const add = (name: string, range: Range) => groups.set(name, [...(groups.get(name) ?? []), range]);
@@ -224,10 +297,15 @@ export function AnnotationLayer({
     // Marge libre à droite de la colonne de texte ? Les autocollants s'y rangent (comme des commentaires)
     const inMargin = box.right + 48 < window.innerWidth;
     const perLine = new Map<string, number>();
+    anchorTops.current.clear();
     for (const a of annotations) {
       const range = resolve(a.message_id, a.anchor);
       if (!range) continue;
       ranges.current.set(a.id, range);
+      if (isThreadKind(a.kind)) {
+        const first = range.getClientRects()[0];
+        if (first) anchorTops.current.set(a.id, first.top - box.top - 4);
+      }
       if (a.kind === "reaction") {
         // Le passage est marqué d'un pointillé doré ; l'autocollant va dans la marge, à hauteur de la ligne
         // (ou, sans marge, au bout du passage, réduit et surélevé). Plusieurs réactions sur une ligne se rangent côte à côte.
@@ -254,8 +332,8 @@ export function AnnotationLayer({
       const range = resolve(composer.target.messageId, composer.target.anchor);
       if (range) add("ann-pending", range);
     }
-    if (menu) {
-      const range = ranges.current.get(menu.annotation.id);
+    for (const id of [menu?.annotation.id, activeThread]) {
+      const range = id ? ranges.current.get(id) : undefined;
       if (range) add("ann-focus", range);
     }
 
@@ -265,15 +343,33 @@ export function AnnotationLayer({
       if (list?.length) CSS.highlights.set(name, new Highlight(...list));
       else CSS.highlights.delete(name);
     }
-  }, [annotations, composer, menu, version, supported, layoutTick]);
+    placeBubbles();
+  }, [annotations, composer, menu, version, supported, layoutTick, activeThread, placeBubbles]);
 
   // Les autocollants suivent le texte quand la mise en page change (largeur de fenêtre, panneaux…)
   useEffect(() => {
     if (!container.current) return;
-    const observer = new ResizeObserver(() => setLayoutTick((t) => t + 1));
+    const relayout = () => setLayoutTick((t) => t + 1);
+    const observer = new ResizeObserver(relayout);
     observer.observe(container.current);
-    return () => observer.disconnect();
+    // La largeur de la marge change avec la fenêtre, même quand la colonne de texte garde sa taille
+    window.addEventListener("resize", relayout);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", relayout);
+    };
   }, []);
+
+  // Un clic ailleurs (hors bulle, roue ou fenêtre) referme la bulle ouverte
+  useEffect(() => {
+    if (!activeThread) return;
+    const down = (e: PointerEvent) => {
+      if ((e.target as Element | null)?.closest?.('[data-bubble], [role="dialog"], [role="menu"]')) return;
+      setActiveThread(null);
+    };
+    window.addEventListener("pointerdown", down);
+    return () => window.removeEventListener("pointerdown", down);
+  }, [activeThread]);
 
   // Nettoyage en quittant la page du cours
   useEffect(() => () => CSS.highlights?.clear(), []);
@@ -395,9 +491,12 @@ export function AnnotationLayer({
           return false;
         }
       });
-      if (!hits.length) return setMenu(null);
+      if (!hits.length) {
+        setActiveThread(null);
+        return setMenu(null);
+      }
       hits.sort((a, b) => a.anchor.quote.length - b.anchor.quote.length);
-      setMenu({ annotation: hits[0], x, y });
+      openAnnotation(hits[0], x, y);
     }, 0);
   }
 
@@ -471,6 +570,7 @@ export function AnnotationLayer({
       if (e.key === "Escape") {
         closeWheel();
         setMenu(null);
+        setActiveThread(null);
       }
     };
     const keyup = (e: KeyboardEvent) => {
@@ -511,8 +611,32 @@ export function AnnotationLayer({
     };
   }, [composer]);
 
+  /** Ouvre une annotation : son fil dans la marge s'il y a la place, sinon une fenêtre près du passage. */
+  function openAnnotation(annotation: AnnotationRow, x: number, y: number) {
+    if (isThreadKind(annotation.kind) && marginOn.current) {
+      setMenu(null);
+      setActiveThread(annotation.id);
+    } else {
+      setActiveThread(null);
+      setMenu({ annotation, x, y });
+    }
+  }
+
+  async function changeStatus(annotation: AnnotationRow, status: AnnotationRow["status"]) {
+    setAnnotations((list) => list.map((a) => (a.id === annotation.id ? { ...a, status } : a)));
+    await setAnnotationStatus(annotation.id, status);
+  }
+
+  const threadActions = (annotation: AnnotationRow): Actions => ({
+    onReply: (text) => run(annotation.id, text),
+    onRetry: () => void run(annotation.id),
+    onStatus: (status) => void changeStatus(annotation, status),
+    onDelete: () => void removeAnnotation(annotation),
+  });
+
   async function removeAnnotation(annotation: AnnotationRow) {
     setMenu(null);
+    setActiveThread((id) => (id === annotation.id ? null : id));
     setAnnotations((list) => list.filter((a) => a.id !== annotation.id));
     await deleteAnnotation(annotation.id);
   }
@@ -570,6 +694,28 @@ export function AnnotationLayer({
           </button>
         );
       })}
+
+      {/* Fils de discussion dans la marge de droite (placés par placeBubbles) */}
+      <div ref={marginRef} className="absolute top-0" style={{ display: "none" }} aria-label="Discussions dans la marge">
+        {annotations.map((a) =>
+          isThreadKind(a.kind) ? (
+            <MarginBubble
+              key={a.id}
+              annotation={a}
+              ping={pings[a.kind]}
+              pending={pending[a.id]}
+              active={activeThread === a.id}
+              register={registerBubble}
+              onActivate={() => {
+                setMenu(null);
+                setActiveThread(a.id);
+              }}
+              onClose={() => setActiveThread(null)}
+              actions={threadActions(a)}
+            />
+          ) : null,
+        )}
+      </div>
 
       {wheel && (
         <>
@@ -638,12 +784,31 @@ export function AnnotationLayer({
           onCancel={() => setComposer(null)}
           onSaved={(annotation) => {
             setAnnotations((list) => [...list, annotation]);
+            const { rect } = composer.target;
             setComposer(null);
+            // L'IA répond tout de suite : la bulle s'ouvre et la réponse s'y écrit
+            openAnnotation(annotation, rect.left + 20, rect.bottom);
+            void run(annotation.id);
           }}
         />
       )}
 
-      {menu && <AnnotationMenu state={menu} customEmotes={prefs.customEmotes} onClose={() => setMenu(null)} onDelete={removeAnnotation} onRecolor={recolor} />}
+      {menu &&
+        (() => {
+          // Toujours la version à jour (la réponse de l'IA arrive pendant que la fenêtre est ouverte)
+          const current = annotations.find((a) => a.id === menu.annotation.id) ?? menu.annotation;
+          return isThreadKind(current.kind) ? (
+            <ThreadPopover
+              state={{ ...menu, annotation: current }}
+              ping={pings[current.kind]}
+              pending={pending[current.id]}
+              actions={threadActions(current)}
+              onClose={() => setMenu(null)}
+            />
+          ) : (
+            <AnnotationMenu state={{ ...menu, annotation: current }} customEmotes={prefs.customEmotes} onClose={() => setMenu(null)} onDelete={removeAnnotation} onRecolor={recolor} />
+          );
+        })()}
 
       {error && (
         <div role="alert" className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-red-600 px-4 py-2 text-sm text-white shadow-lg">
@@ -761,7 +926,6 @@ function AnnotationMenu({
   const width = Math.min(320, window.innerWidth - 24);
   const rect = new DOMRect(state.x - 20, state.y, 0, 12);
   const emote = annotation.kind === "reaction" && annotation.emote ? emoteView(annotation.emote, customEmotes) : null;
-  const text = annotation.kind === "question" ? annotation.thread_messages?.find((m) => m.role === "user")?.content : annotation.note;
 
   return (
     <>
@@ -780,15 +944,6 @@ function AnnotationMenu({
             <img src={emote.anim} alt="" className="h-14 w-14 rounded-full object-cover" />
             <span className="text-sm font-medium">{emote.label}</span>
           </div>
-        )}
-        {annotation.kind !== "highlight" && annotation.kind !== "reaction" && (
-          <blockquote className="mt-2 line-clamp-2 border-l-2 border-black/15 pl-2 text-xs italic opacity-60 dark:border-white/20">
-            {annotation.anchor.quote}
-          </blockquote>
-        )}
-        {text && <p className="mt-2 whitespace-pre-wrap text-sm">{text}</p>}
-        {annotation.kind === "question" && (
-          <p className="mt-2 text-xs opacity-50">La réponse de l&apos;IA dans la marge arrive avec la prochaine mise à jour.</p>
         )}
         {annotation.kind === "highlight" && (
           <div className="mt-2 flex gap-2">
@@ -814,6 +969,39 @@ function AnnotationMenu({
             Supprimer
           </button>
         </div>
+      </div>
+    </>
+  );
+}
+
+/** Fil de discussion en fenêtre, quand la marge est trop étroite pour les bulles. */
+function ThreadPopover({
+  state,
+  ping,
+  pending,
+  actions,
+  onClose,
+}: {
+  state: MenuState;
+  ping: PingDef;
+  pending?: Pending;
+  actions: Actions;
+  onClose: () => void;
+}) {
+  const width = Math.min(380, window.innerWidth - 24);
+  const rect = new DOMRect(state.x - 20, state.y, 0, 12);
+  return (
+    <>
+      <div className="fixed inset-0 z-40" {...stopGestures} onPointerDown={(e) => { e.stopPropagation(); onClose(); }} />
+      <div
+        {...stopGestures}
+        className="fixed z-50 rounded-2xl border border-black/10 border-l-[3px] bg-[var(--background)] p-3 shadow-2xl dark:border-white/15"
+        style={{ ...popoverPosition(rect, width, 420), borderLeftColor: ping.color }}
+        role="dialog"
+        aria-label={KIND_LABEL[state.annotation.kind]}
+        onKeyDown={(e) => e.key === "Escape" && onClose()}
+      >
+        <ThreadView annotation={state.annotation} ping={ping} pending={pending} actions={actions} onClose={onClose} />
       </div>
     </>
   );
