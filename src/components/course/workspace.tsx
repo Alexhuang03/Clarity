@@ -9,7 +9,7 @@ import { CourseOutline } from "./course-outline";
 import { CourseHeader } from "@/app/courses/[id]/course-header";
 import { CourseColumns } from "./layout";
 import { OutlineButton } from "./outline-button";
-import { DocumentsPanel } from "./documents-panel";
+import { AddDocumentsButton, DropOverlay, UploadChips, useDocumentUpload, type DocKind, type Upload } from "./documents";
 import { Markdown } from "./markdown";
 import { AnnotationLayer } from "@/components/annotations/annotation-layer";
 import type { AnnotationRow } from "@/lib/annotations/types";
@@ -82,12 +82,21 @@ function ChatInput({
   busy,
   onSend,
   context,
+  onFiles,
+  uploads,
+  documents,
+  onDismissUpload,
 }: {
   disabled: boolean;
   busy: boolean;
   onSend: (content: string) => Promise<boolean>;
   /** Étiquette sous la barre : ce que fait cette conversation */
   context: string;
+  /** Bouton + : ajout de documents */
+  onFiles: (files: File[], kind: DocKind) => void;
+  uploads: Upload[];
+  documents: DocumentRow[];
+  onDismissUpload: (id: string) => void;
 }) {
   const [value, setValue] = useState("");
 
@@ -102,10 +111,12 @@ function ChatInput({
   return (
     // Fondu sous la barre : le texte qui défile ne se voit plus à travers
     <div className="sticky bottom-0 z-10 -mx-4 bg-gradient-to-t from-[var(--background)] from-55% to-transparent px-4 pb-4 pt-10">
+      <UploadChips uploads={uploads} documents={documents} onDismiss={onDismissUpload} />
       <form
         onSubmit={submit}
-        className="mx-auto flex max-w-[40rem] items-end gap-2 rounded-[1.6rem] border border-black/10 bg-[var(--background)] p-1.5 pl-4 shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition focus-within:border-indigo-500/50 dark:border-white/10 dark:bg-[#151515] dark:shadow-[0_8px_30px_rgba(0,0,0,0.6)]"
+        className="mx-auto flex max-w-[40rem] items-end gap-2 rounded-[1.6rem] border border-black/10 bg-[var(--background)] p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition focus-within:border-indigo-500/50 dark:border-white/10 dark:bg-[#151515] dark:shadow-[0_8px_30px_rgba(0,0,0,0.6)]"
       >
+        <AddDocumentsButton onFiles={onFiles} />
         <textarea
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -118,7 +129,7 @@ function ChatInput({
           rows={1}
           maxLength={4000}
           disabled={disabled}
-          placeholder={disabled ? "Ajoute un document pour poser des questions" : "Pose une question sur ton cours…"}
+          placeholder={disabled ? "Ajoute un document avec + pour poser des questions" : "Pose une question sur ton cours…"}
           className="max-h-40 min-h-10 flex-1 resize-none bg-transparent py-2 outline-none placeholder:opacity-50 [field-sizing:content]"
         />
         <button
@@ -167,6 +178,7 @@ export function Workspace({
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const { uploads, upload, dismiss } = useDocumentUpload({ courseId: course.id, userId, onChange: setDocuments });
 
   const ready = documents.filter((d) => d.status === "ready");
   const processing = documents.some((d) => d.status === "uploaded" || d.status === "parsing");
@@ -274,22 +286,20 @@ export function Workspace({
       <CourseHeader
         title={course.title}
         subject={course.subject?.name ?? null}
-        outline={<OutlineButton messages={messages} parts={parts} />}
+        outline={<OutlineButton messages={messages} parts={parts} documents={documents} onDocumentsChange={setDocuments} />}
       />
-      <CourseColumns aside={<CourseOutline messages={messages} parts={parts} />}>
-        <DocumentsPanel
-          courseId={course.id}
-          userId={userId}
-          documents={documents}
-          onChange={setDocuments}
-          defaultOpen={messages.length === 0}
-        />
+      <DropOverlay onFiles={upload} />
+      <CourseColumns aside={<CourseOutline messages={messages} parts={parts} documents={documents} onDocumentsChange={setDocuments} />}>
 
         <div className="flex-1 space-y-10 py-8">
           {documents.length === 0 && (
-            <p className="text-center opacity-70">
-              Commence par ajouter les fichiers de ton cours et tes exercices ci-dessus.
-            </p>
+            <div className="mx-auto max-w-md pt-10 text-center">
+              <p className="text-lg font-medium">Ajoute ton cours pour commencer</p>
+              <p className="mt-2 text-sm opacity-70">
+                Utilise le bouton <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-current text-xs leading-none">+</span> de
+                la barre en bas, ou glisse tes fichiers sur la page : cours, exercices, PDF, Word, PowerPoint, photos.
+              </p>
+            </div>
           )}
 
           {ready.length > 0 && !analyzedAt && !processing && (
@@ -391,6 +401,10 @@ export function Workspace({
           busy={busy}
           onSend={ask}
           context={`Questions sur ce cours · réponses tirées de ${ready.length > 1 ? `tes ${ready.length} documents` : "ton document"}`}
+          onFiles={upload}
+          uploads={uploads}
+          documents={documents}
+          onDismissUpload={dismiss}
         />
       </CourseColumns>
     </>

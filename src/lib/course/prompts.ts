@@ -85,7 +85,8 @@ Reste concis : environ 250 mots maximum, sauf si l'étudiant demande plus de dé
 // À tenir à jour quand une fonctionnalité est ajoutée.
 const APP_GUIDE = `FONCTIONNALITÉS DE CLARITY
 - Créer un cours (titre + matière), le modifier ou le supprimer depuis l'accueil (crayon) ou la page du cours.
-- Ajouter des fichiers de cours ou d'exercices : PDF, Word, PowerPoint, Markdown, texte, images (50 Mo max). L'IA les lit, y compris formules et schémas.
+- Ajouter des fichiers de cours ou d'exercices : PDF, Word, PowerPoint, Markdown, texte, images (50 Mo max), avec le bouton + à gauche de la barre de questions (ou en glissant les fichiers sur la page ; sur téléphone, « Prendre une photo »). L'IA les lit, y compris formules et schémas.
+- Les documents importés sont listés dans le sommaire (marge de gauche, ou bouton « Sommaire » sur téléphone) : état de lecture, ouvrir le fichier, passer de « Cours » à « Exercices », réessayer, supprimer.
 - « Analyser et résumer le cours » : résumé détaillé pour débutant, avec sommaire. Un cours long est découpé en parties au choix.
 - Chaque explication cite ses sources (pastilles numérotées) : un clic ouvre le document original à la bonne page.
 - Les corrigés d'exercices sont repliés (« Voir le corrigé »).

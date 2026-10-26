@@ -1,7 +1,8 @@
 "use client";
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import type { MessageRow, PartRow } from "@/lib/course/types";
+import type { DocumentRow, MessageRow, PartRow } from "@/lib/course/types";
+import { DocumentList } from "./documents";
 import { summaryHeadings } from "./markdown";
 
 // Le sommaire reste sobre : pas d'emoji devant les titres
@@ -18,10 +19,15 @@ function scrollTo(id: string) {
 export const CourseOutline = memo(function CourseOutline({
   messages,
   parts,
+  documents,
+  onDocumentsChange,
   onNavigate,
 }: {
   messages: MessageRow[];
   parts: PartRow[];
+  /** Documents du cours (absents sur une page partagée : les fichiers restent privés) */
+  documents?: DocumentRow[];
+  onDocumentsChange?: (updater: (docs: DocumentRow[]) => DocumentRow[]) => void;
   /** Appelé avant de défiler vers un titre (ex. fermer le panneau sur mobile) */
   onNavigate?: () => void;
 }) {
@@ -55,12 +61,21 @@ export const CourseOutline = memo(function CourseOutline({
     navRef.current?.querySelector('[aria-current="location"]')?.scrollIntoView({ block: "nearest" });
   }, [active]);
 
-  if (groups.length === 0) return null;
+  const showDocs = !!documents && !!onDocumentsChange;
+  if (groups.length === 0 && !showDocs) return null;
   const single = groups.length === 1;
 
   return (
     <nav ref={navRef} aria-label="Sommaire du cours" className="text-[0.8125rem] leading-snug">
-      <p className="mb-4 text-[0.6875rem] font-medium uppercase tracking-[0.12em] opacity-40">Sommaire</p>
+      {showDocs && (
+        <section className={groups.length ? "mb-8" : ""} aria-label="Documents">
+          <p className="mb-2 text-[0.6875rem] font-medium uppercase tracking-[0.12em] opacity-40">
+            Documents <span className="tabular-nums">({documents.length})</span>
+          </p>
+          <DocumentList documents={documents} onChange={onDocumentsChange} />
+        </section>
+      )}
+      {groups.length > 0 && <p className="mb-4 text-[0.6875rem] font-medium uppercase tracking-[0.12em] opacity-40">Sommaire</p>}
       <ol className="space-y-1">
         {groups.map((group, i) => {
           const open = single || group.id === activeGroup;
