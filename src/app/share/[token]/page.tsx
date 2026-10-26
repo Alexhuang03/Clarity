@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { MessageRow, PartRow } from "@/lib/course/types";
 import { COURSE_FRAME, COURSE_MARGIN } from "@/components/course/layout";
 import { OutlineButton } from "@/components/course/outline-button";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { SharedConversation } from "./shared-conversation";
 
 type SharedCourse = {
@@ -58,6 +59,7 @@ async function SharedContent({ params }: { params: Promise<{ token: string }> })
             </p>
           </div>
           <OutlineButton messages={course.messages} parts={course.parts} />
+          <ThemeToggle />
         </header>
       </div>
 

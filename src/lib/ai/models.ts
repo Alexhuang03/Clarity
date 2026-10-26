@@ -7,20 +7,26 @@ export type ModelId = `${"gemini" | "groq" | "openrouter"}:${string}`;
 export const EMBEDDING_MODEL = "gemini-embedding-2";
 export const EMBEDDING_DIMENSIONS = 768;
 
-// Lecture des PDF et images (multimodal)
-export const VISION_MODEL = "gemini-flash-latest";
+// Versions précises plutôt que les alias « -latest » : ceux-ci pointent toujours vers le modèle le plus
+// récent, saturé en gratuit. Mesuré le 26/10/2026 sur la lecture d'une page de cours en photo :
+// gemini-flash-latest (3.8) et 3.7-flash → 503 ou aucune réponse en 90 à 180 s ; 3.6-flash → 4-5 s ;
+// 3.5-flash → 5-50 s ; 3.1-flash-lite → 3 s. L'alias reste en dernier secours : une version retirée
+// renvoie 404 et la chaîne passe simplement à la suivante.
+const FLASH: ModelId[] = ["gemini:gemini-3.6-flash", "gemini:gemini-3.5-flash", "gemini:gemini-flash-latest"];
+const FLASH_LITE: ModelId[] = ["gemini:gemini-3.1-flash-lite", "gemini:gemini-3.5-flash-lite", "gemini:gemini-flash-lite-latest"];
 
-// Chaînes de secours : si un modèle échoue (quota, surcharge), on passe au suivant.
-const CHAINS: Record<"summary" | "chat" | "light" | "analysis", ModelId[]> = {
-  // Résumés : gros contexte et bonne qualité d'explication
-  summary: ["gemini:gemini-flash-latest", "gemini:gemini-flash-lite-latest", "groq:openai/gpt-oss-120b"],
+// Chaînes de secours : si un modèle échoue (quota, surcharge, délai), on passe au suivant.
+const CHAINS: Record<"summary" | "chat" | "light" | "analysis" | "vision", ModelId[]> = {
+  // Résumés : gros contexte et bonne qualité d'explication (Groq gratuit : 8 000 tokens/min, trop peu pour une partie)
+  summary: [...FLASH, FLASH_LITE[0], "groq:openai/gpt-oss-120b"],
   // Questions : rapidité d'abord
-  chat: ["groq:openai/gpt-oss-120b", "gemini:gemini-flash-latest", "gemini:gemini-flash-lite-latest"],
-  // Analyse de chaque question du chat : quelqu'un attend, la vitesse prime.
-  // Mesuré (oct. 2026) : Groq gpt-oss-20b 0,2-0,5 s, Gemini Flash-Lite gratuit 7-16 s.
-  analysis: ["groq:openai/gpt-oss-20b", "groq:openai/gpt-oss-120b", "gemini:gemini-flash-lite-latest"],
+  chat: ["groq:openai/gpt-oss-120b", FLASH[0], FLASH[1], FLASH_LITE[0]],
+  // Analyse de chaque question du chat : quelqu'un attend, la vitesse prime (Groq gpt-oss-20b : 0,2-0,5 s)
+  analysis: ["groq:openai/gpt-oss-20b", "groq:openai/gpt-oss-120b", FLASH_LITE[0]],
   // Petites tâches sans urgence (titres des parties...)
-  light: ["gemini:gemini-flash-lite-latest", "groq:openai/gpt-oss-20b", "gemini:gemini-flash-latest"],
+  light: [FLASH_LITE[0], "groq:openai/gpt-oss-20b", FLASH_LITE[1], FLASH[0]],
+  // Lecture des PDF et des images (multimodal : Gemini uniquement)
+  vision: [...FLASH, FLASH_LITE[0]],
 };
 
 const KEYS: Record<string, string | undefined> = {
@@ -29,7 +35,21 @@ const KEYS: Record<string, string | undefined> = {
   openrouter: process.env.OPENROUTER_API_KEY,
 };
 
-/** Chaîne de modèles pour un usage, limitée aux fournisseurs dont la clé est renseignée. */
+// ---- Santé des modèles : un modèle saturé ou introuvable passe en fin de chaîne pendant un moment ----
+// (sinon chaque page d'un PDF, chaque question, perdrait à nouveau du temps sur lui)
+const globalForHealth = globalThis as typeof globalThis & { __clarityModelHealth?: Map<string, number> };
+const unavailableUntil = (globalForHealth.__clarityModelHealth ??= new Map());
+
+/** Note qu'un modèle vient d'échouer (surcharge, quota, délai, introuvable) : il est évité pendant `ms`. */
+export function markUnavailable(model: string, ms = 5 * 60_000) {
+  unavailableUntil.set(model, Date.now() + ms);
+}
+export function markAvailable(model: string) {
+  unavailableUntil.delete(model);
+}
+const isHealthy = (model: string) => (unavailableUntil.get(model) ?? 0) <= Date.now();
+
+/** Chaîne de modèles pour un usage : clé renseignée, modèles en bonne santé d'abord (l'ordre est gardé sinon). */
 export function modelChain(use: keyof typeof CHAINS, preferred?: string | null): ModelId[] {
   // Le modèle choisi par l'utilisateur passe en tête, les autres restent en secours
   const chain = preferred
@@ -39,7 +59,7 @@ export function modelChain(use: keyof typeof CHAINS, preferred?: string | null):
   if (available.length === 0) {
     throw new Error("Aucune clé API d'IA configurée (GEMINI_API_KEY, GROQ_API_KEY ou OPENROUTER_API_KEY).");
   }
-  return available;
+  return [...available.filter(isHealthy), ...available.filter((m) => !isHealthy(m))];
 }
 
 export function apiKey(provider: string): string {

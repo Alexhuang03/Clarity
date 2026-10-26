@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import mammoth from "mammoth";
 import TurndownService from "turndown";
 import { PDFDocument } from "pdf-lib";
+import sharp from "sharp";
 import { extractText } from "unpdf";
 import { readFileWithGemini } from "@/lib/ai/gemini";
 
@@ -115,15 +116,50 @@ export async function* pdfBatches(source: PDFDocument, batchSize = PDF_BATCH) {
   }
 }
 
-async function extractImage(data: Uint8Array, mimeType: string): Promise<Extracted> {
+// Au-delà, une photo est réduite avant l'envoi : Gemini la lit aussi bien, et l'envoi est bien plus léger
+// (une photo de téléphone de 12 Mpx et 5 Mo devient ~2 Mpx et ~0,4 Mo).
+const IMAGE_MAX_SIDE = 2048;
+
+/**
+ * Prépare une image pour la lecture : redressée selon son orientation EXIF (photo prise de travers),
+ * réduite si elle est grande. Format que sharp ne lit pas : l'image part telle quelle.
+ */
+async function prepareImage(data: Uint8Array, mimeType: string): Promise<{ data: Uint8Array; mimeType: string }> {
+  try {
+    const meta = await sharp(data, { failOn: "none" }).metadata();
+    const rotated = (meta.orientation ?? 1) > 1;
+    const big = Math.max(meta.width ?? 0, meta.height ?? 0) > IMAGE_MAX_SIDE;
+    if (!rotated && !big) return { data, mimeType };
+    const image = sharp(data, { failOn: "none" })
+      .rotate()
+      .resize({ width: IMAGE_MAX_SIDE, height: IMAGE_MAX_SIDE, fit: "inside", withoutEnlargement: true });
+    // Une capture (PNG) garde des contours nets ; une photo passe en JPEG, bien plus légère
+    const png = meta.format === "png";
+    const out = png ? await image.png({ compressionLevel: 9 }).toBuffer() : await image.jpeg({ quality: 88 }).toBuffer();
+    console.info(
+      `[ingest] image ${meta.width}×${meta.height} (${(data.length / 1e6).toFixed(1)} Mo) préparée : ${(out.length / 1e6).toFixed(1)} Mo`,
+    );
+    return { data: new Uint8Array(out), mimeType: png ? "image/png" : "image/jpeg" };
+  } catch (error) {
+    console.warn("[ingest] image non préparée, envoyée telle quelle", error);
+    return { data, mimeType };
+  }
+}
+
+async function extractImage(original: Uint8Array, originalType: string): Promise<Extracted> {
+  const { data, mimeType } = await prepareImage(original, originalType);
   if (data.length > GEMINI_MAX_BYTES) {
     throw new UserFacingError("Image trop lourde pour être lue par l'IA (14 Mo max). Réduis sa taille.");
   }
+  const t0 = Date.now();
   const text = await readFileWithGemini(
     data,
     mimeType,
     `Transcris fidèlement en Markdown le contenu de cette image (texte, formules, schémas).\n${TRANSCRIBE_RULES}`,
+    // Une image se lit en quelques secondes : au-delà d'une minute, le modèle est saturé, on passe au suivant
+    { timeoutMs: 60_000 },
   );
+  console.info(`[ingest] image lue par Gemini en ${((Date.now() - t0) / 1000).toFixed(0)} s`);
   return { pages: [{ page: 1, text: text.trim() }], pageCount: 1 };
 }
 

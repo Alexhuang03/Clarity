@@ -1,5 +1,12 @@
 import "server-only";
-import { apiKey, type ModelId } from "./models";
+import { apiKey, markAvailable, markUnavailable, type ModelId } from "./models";
+
+// Un modèle saturé accepte parfois la requête sans jamais répondre : sans rien reçu pendant ce délai,
+// on l'abandonne pour le suivant (avant le premier morceau), ou on s'arrête (pendant la réponse).
+const FIRST_CHUNK_MS = 45_000;
+const IDLE_MS = 60_000;
+// Budget ajouté pour la réflexion des modèles Gemini (en plus de la réponse demandée)
+const THINKING_ALLOWANCE = 4096;
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -69,7 +76,9 @@ async function* streamGemini(model: string, req: ChatRequest): AsyncGenerator<St
           parts: [{ text: m.content }],
         })),
         generationConfig: {
-          maxOutputTokens: req.maxTokens ?? 8192,
+          // La réflexion de Gemini compte dans ce budget : sans marge, une réponse courte (bulle, salutation)
+          // était coupée net (mesuré : 800 tokens demandés → 45 caractères de réponse après la réflexion)
+          maxOutputTokens: (req.maxTokens ?? 8192) + (req.fast ? 0 : THINKING_ALLOWANCE),
           temperature: req.temperature ?? 0.4,
           // Gemini renvoie alors un résumé de sa réflexion (parties marquées "thought").
           // Petite tâche : réflexion minimale, sinon le modèle « léger » réfléchit plusieurs secondes.
@@ -146,25 +155,38 @@ export async function* streamWithFallback(
   let thought = false;
   for (const [index, model] of chain.entries()) {
     let started = false;
+    const silence = new AbortController();
+    let timer = setTimeout(() => silence.abort(new Error("aucune réponse")), FIRST_CHUNK_MS);
+    const signal = req.signal ? AbortSignal.any([req.signal, silence.signal]) : silence.signal;
     try {
       onModel?.(model);
       if (index > 0 && thought) {
         yield { type: "thought", text: `\n\n*— Modèle indisponible, nouvel essai avec ${model.split(":")[1]} —*\n\n` };
       }
-      for await (const chunk of streamModel(model, req)) {
+      for await (const chunk of streamModel(model, { ...req, signal })) {
+        clearTimeout(timer);
+        timer = setTimeout(() => silence.abort(new Error("réponse interrompue")), IDLE_MS);
         if (chunk.type === "text") started = true;
         else thought = true;
         yield chunk;
       }
-      if (started) return;
+      if (started) {
+        markAvailable(model);
+        return;
+      }
       lastError = new Error(`${model} n'a rien renvoyé`);
     } catch (error) {
       if (started) throw error;
       // Même une erreur non temporaire (clé invalide...) peut ne concerner qu'un fournisseur
       lastError = error;
-      // Délai dépassé : inutile d'essayer les modèles suivants avec un signal déjà annulé
+      // Délai de l'appelant dépassé : inutile d'essayer les modèles suivants avec un signal déjà annulé
       if (req.signal?.aborted) throw error;
+      // Surcharge, quota, silence ou modèle retiré : évité quelques minutes (les requêtes suivantes vont ailleurs)
+      const status = error instanceof ProviderError ? error.status : 0;
+      if (silence.signal.aborted || status === 429 || status === 404 || status >= 500) markUnavailable(model);
       console.warn(`[ia] ${model} indisponible, modèle suivant`, (error as Error).message);
+    } finally {
+      clearTimeout(timer);
     }
   }
   throw lastError ?? new Error("Aucun modèle disponible");

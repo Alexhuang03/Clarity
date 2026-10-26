@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "./actions";
@@ -19,9 +20,12 @@ export default function Home() {
           </span>
           Clarity
         </Link>
-        <Suspense fallback={<div className="h-8 w-8 rounded-full bg-black/5 dark:bg-white/10" />}>
-          <UserMenu />
-        </Suspense>
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
+          <Suspense fallback={<div className="h-8 w-8 rounded-full bg-black/5 dark:bg-white/10" />}>
+            <UserMenu />
+          </Suspense>
+        </div>
       </header>
 
       <main className="pb-16 pt-10 sm:pt-16">

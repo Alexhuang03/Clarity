@@ -1,11 +1,15 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/* Thème choisi par l'utilisateur (bouton soleil / lune) : data-theme sur <html>, posé avant
+   l'affichage par le script de layout.tsx. Les classes dark: suivent cet attribut. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  /* Barres de défilement et champs natifs assortis au thème clair ou sombre */
-  color-scheme: light dark;
+  /* Barres de défilement et champs natifs assortis au thème */
+  color-scheme: light;
 }
 
 @theme inline {
@@ -15,11 +19,10 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root[data-theme="dark"] {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  color-scheme: dark;
 }
 
 body {

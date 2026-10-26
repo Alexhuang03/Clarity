@@ -1,5 +1,5 @@
 import "server-only";
-import { apiKey, EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, VISION_MODEL } from "./models";
+import { apiKey, EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, markAvailable, markUnavailable, modelChain } from "./models";
 import { ProviderError } from "./providers";
 
 const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
@@ -81,22 +81,21 @@ export async function embed(
   return vectors;
 }
 
-/** Envoie un fichier (PDF, image) à Gemini avec une consigne, renvoie le texte produit. */
+/**
+ * Envoie un fichier (PDF, image) à Gemini avec une consigne, renvoie le texte produit.
+ * Un seul essai par modèle, avec un délai court : un modèle saturé ou muet est noté indisponible
+ * et le suivant prend le relais (avant : jusqu'à 3 x 2 min perdues sur le même modèle saturé).
+ * Si tous échouent, un second tour est tenté après une courte pause.
+ */
 export async function readFileWithGemini(
   data: Uint8Array,
   mimeType: string,
   prompt: string,
+  { timeoutMs = 90_000 }: { timeoutMs?: number } = {},
 ): Promise<string> {
+  const base64 = Buffer.from(data).toString("base64");
   const body = (thinking: boolean) => ({
-    contents: [
-      {
-        role: "user",
-        parts: [
-          { inlineData: { mimeType, data: Buffer.from(data).toString("base64") } },
-          { text: prompt },
-        ],
-      },
-    ],
+    contents: [{ role: "user", parts: [{ inlineData: { mimeType, data: base64 } }, { text: prompt }] }],
     generationConfig: {
       temperature: 0,
       maxOutputTokens: 65536,
@@ -105,18 +104,41 @@ export async function readFileWithGemini(
       ...(thinking ? { thinkingConfig: { thinkingLevel: "low" } } : {}),
     },
   });
-  let result: { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] };
-  try {
-    result = (await geminiFetch(`${BASE}/${VISION_MODEL}:generateContent`, body(true))) as typeof result;
-  } catch (error) {
-    // Un modèle plus ancien ne connaît pas ce réglage : on réessaie sans
-    if (!(error instanceof ProviderError && error.status === 400 && /thinking/i.test(error.message))) throw error;
-    result = (await geminiFetch(`${BASE}/${VISION_MODEL}:generateContent`, body(false))) as typeof result;
+  type Result = { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] };
+
+  let lastError: unknown;
+  for (let round = 0; round < 2; round++) {
+    if (round > 0) await sleep(10_000);
+    for (const model of modelChain("vision")) {
+      const id = model.split(":")[1];
+      const started = Date.now();
+      try {
+        let result: Result;
+        try {
+          result = (await geminiFetch(`${BASE}/${id}:generateContent`, body(true), { attempts: 1, timeoutMs })) as Result;
+        } catch (error) {
+          // Un modèle qui ne connaît pas ce réglage de réflexion : même modèle, sans réglage
+          if (!(error instanceof ProviderError && error.status === 400 && /thinking/i.test(error.message))) throw error;
+          result = (await geminiFetch(`${BASE}/${id}:generateContent`, body(false), { attempts: 1, timeoutMs })) as Result;
+        }
+        const text =
+          result.candidates?.[0]?.content?.parts
+            ?.filter((p) => !p.thought)
+            .map((p) => p.text ?? "")
+            .join("") ?? "";
+        if (!text.trim()) throw new ProviderError(`${id} : réponse vide`, 502, true);
+        markAvailable(model);
+        console.log(`[lecture] ${id} : ${((Date.now() - started) / 1000).toFixed(1)} s`);
+        return text;
+      } catch (error) {
+        lastError = error;
+        if (error instanceof ProviderError && !error.retryable && error.status !== 404) throw error;
+        // Quota par minute : Gemini indique le délai ; surcharge, délai dépassé, modèle retiré : 5 min
+        const hinted = error instanceof ProviderError ? Number(error.message.match(/"retryDelay":\s*"(\d+)/)?.[1]) : NaN;
+        markUnavailable(model, hinted ? (hinted + 1) * 1000 : 5 * 60_000);
+        console.warn(`[lecture] ${id} indisponible (${(error as Error).message.slice(0, 120)}), modèle suivant`);
+      }
+    }
   }
-  return (
-    result.candidates?.[0]?.content?.parts
-      ?.filter((p) => !p.thought)
-      .map((p) => p.text ?? "")
-      .join("") ?? ""
-  );
+  throw lastError ?? new Error("Aucun modèle de lecture disponible");
 }

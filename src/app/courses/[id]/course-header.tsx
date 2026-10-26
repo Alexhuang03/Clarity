@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { COURSE_FRAME, COURSE_MARGIN } from "@/components/course/layout";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 /** id de l'emplacement de la barre où d'autres composants ajoutent un bouton (portail React). */
 export const COURSE_HEADER_SLOT = "course-header-actions";
@@ -45,6 +46,7 @@ export function CourseHeader({
           {/* Emplacement rempli par la couche d'annotations (bouton « 💬 N » sur mobile) */}
           <div id={COURSE_HEADER_SLOT} className="flex shrink-0 items-center empty:hidden" />
           {outline}
+          <ThemeToggle />
         </div>
       </div>
     </header>
