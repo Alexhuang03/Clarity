@@ -92,11 +92,11 @@ const APP_GUIDE = `FONCTIONNALITÉS DE CLARITY
 - Poser des questions sur le cours dans la barre en bas ; voir la réflexion du modèle (panneau « Réflexion »).
 - Annoter une réponse de l'IA : sélectionner un passage (ou clic droit maintenu, ou Alt + glisser) ouvre une roue façon League of Legends pour surligner (4 couleurs), poser une question sur le passage, écrire ce qu'on a compris ou signaler une erreur de l'IA. Ctrl + glisser ouvre une roue d'émotes pour réagir à un passage.
 - Bulles dans la marge (comme les commentaires de Google Docs) : l'IA répond à une question posée sur un passage, revérifie un passage signalé comme faux (verdict : erreur confirmée, imprécis ou correct) et évalue « ce que j'ai compris » (bien compris, presque, à revoir). On peut poursuivre la discussion dans la bulle, marquer une question comme comprise ou une erreur comme traitée.
+- Sur téléphone (ou fenêtre étroite) : le bouton « 💬 N » de la barre du cours ouvre toutes les discussions dans un panneau en bas de l'écran. Quand plusieurs annotations se chevauchent, une pastille numérotée dans la marge de gauche permet de choisir laquelle ouvrir.
 - Compte : connexion par email et mot de passe, mot de passe oublié, page « Mon compte » (changer le mot de passe, choisir le ping de chaque action et les 8 émotes de la roue, importer ses propres émotes avec un son, régler ou couper le son, supprimer le compte).
 
 PAS ENCORE DISPONIBLE (bientôt)
 - Fiches de révision par notion, enrichies par les annotations.
-- Affichage adapté au mobile des annotations (panneau en bas de l'écran).
 - Exporter un résumé en PDF ou télécharger un fichier : pas encore possible. En attendant, on peut imprimer la page du navigateur en PDF (Ctrl+P puis « Enregistrer au format PDF »).
 - Accès à internet, à la météo ou à l'actualité : jamais (Clarity ne travaille que sur tes cours).`;
 

@@ -34,7 +34,7 @@ npm run dev
   (formules en LaTeX, schémas décrits), découpage en extraits citables, embeddings
 - [x] Étape 3 : couche IA multi-fournisseurs avec bascule automatique, plan des cours longs, résumé « débutant »
   par partie avec sources vérifiées et corrigés repliables, questions dans la conversation (recherche sémantique)
-- [ ] Étape 4 : annotations
+- [x] Étape 4 : annotations
   - [x] 4a. Roue de pings LoL (clic droit maintenu + glisser, Alt + glisser, ou sélection) : surligner (4 couleurs),
     poser une question, ce que j'ai compris, signaler une erreur — vraies icônes et sons de pings ;
     roue d'émotes (Ctrl + glisser) pour réagir à un passage, autocollants dans la marge ;
@@ -43,7 +43,8 @@ npm run dev
     les erreurs signalées (verdict), évalue « ce que j'ai compris » ; discussion suivie, « compris » / « traité »
   - [x] 4c. Personnalisation dans « Mon compte » : ping de chaque action (12 pings), 8 émotes de la roue,
     émotes importées (image + son, 30 max), volume et son coupé (aussi depuis la roue)
-  - [ ] 4d. Mobile (panneau du bas) et annotations qui se chevauchent
+  - [x] 4d. Mobile : panneau du bas (toutes les discussions, fil, glisser pour fermer) ouvert depuis le bouton
+    « 💬 N » de la barre ; annotations qui se chevauchent : pastille dans la marge et liste au choix
 - [ ] Étape 5 : fiches de révision par notion (approche hybride « LLM Wiki » + RAG)
   - [ ] 5a. Fiche par notion clé créée à l'analyse du cours (définition, formule, exemple, pièges), chaque phrase sourcée [S#]
   - [ ] 5b. Le chat consulte d'abord la fiche de la notion, puis le RAG pour les citations précises

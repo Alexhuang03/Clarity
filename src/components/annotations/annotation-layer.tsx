@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
+import { COURSE_HEADER_SLOT } from "@/app/courses/[id]/course-header";
 import { anchorFromRange, buildTextIndex, rangeFromAnchor, type Anchor } from "@/lib/annotations/anchor";
 import { HIGHLIGHT_COLORS, HIGHLIGHT_SWATCH, isThreadKind, type AnnotationRow, type HighlightColor } from "@/lib/annotations/types";
 import {
@@ -69,6 +71,14 @@ const BUBBLE_MAX = 300;
 const BUBBLE_GAP = 8;
 /** Place libre à droite de la colonne de texte pour les bulles. */
 const marginRoom = (box: DOMRect) => window.innerWidth - box.right - BUBBLE_OFFSET - 16;
+/** Le panneau du bas couvre l'écran : le passage remonte pour rester visible au-dessus, sous l'en-tête. */
+function revealAboveSheet(range: Range | undefined) {
+  const rect = range?.getBoundingClientRect();
+  const top = 72;
+  if (rect && (rect.top < top || rect.bottom > window.innerHeight * 0.25)) {
+    window.scrollBy({ top: rect.top - top, behavior: "smooth" });
+  }
+}
 const subscribeResize = (onChange: () => void) => {
   window.addEventListener("resize", onChange);
   return () => window.removeEventListener("resize", onChange);
@@ -208,12 +218,15 @@ export function AnnotationLayer({
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [chooser, setChooser] = useState<ChooserState | null>(null);
   const badges = useRef(new Map<string, HTMLButtonElement>());
+  const revealPending = useRef<string | null>(null);
   // Marge assez large pour les bulles ? Sinon : panneau du bas et bouton « 💬 » flottant
   const wide = useSyncExternalStore(
     subscribeResize,
     () => !!container.current && marginRoom(container.current.getBoundingClientRect()) >= BUBBLE_MIN,
     () => true,
   );
+  // Le bouton « 💬 N » va dans la barre du cours (toujours visible, ne cache jamais le texte)
+  const headerSlot = useSyncExternalStore(noSubscription, () => document.getElementById(COURSE_HEADER_SLOT), () => null);
   const clusters = useMemo(() => overlapClusters(annotations), [annotations]);
   const threads = useMemo(() => annotations.filter((a) => isThreadKind(a.kind)), [annotations]);
   // Côté serveur on suppose le navigateur compatible (sinon le bandeau d'avertissement
@@ -358,15 +371,17 @@ export function AnnotationLayer({
       const range = resolve(composer.target.messageId, composer.target.anchor);
       if (range) add("ann-pending", range);
     }
-    // Pastille « 💬 N » au bout des passages où plusieurs annotations se chevauchent (en exposant)
+    // Pastille « N » dans la marge de gauche, à hauteur de la ligne où les annotations commencent à se chevaucher
+    // (dans le texte, elle cacherait des mots). Sur mobile, la marge ne fait que 16 px : pastille plus petite.
     for (const group of clusters) {
       const el = badges.current.get(clusterKey(group));
-      const last = group.reduce((a, b) => (b.anchor.end > a.anchor.end ? b : a));
-      const rects = ranges.current.get(last.id)?.getClientRects();
-      const rect = rects?.[rects.length - 1];
+      const latest = group.reduce((a, b) => (b.anchor.start > a.anchor.start ? b : a));
+      const rect = ranges.current.get(latest.id)?.getClientRects()[0];
       if (!el || !rect) continue;
-      el.style.left = `${rect.right - box.left + 1}px`;
-      el.style.top = `${rect.top - box.top - 9}px`;
+      const size = box.left >= 28 ? 18 : 15;
+      el.style.width = el.style.height = `${size}px`;
+      el.style.left = `${-Math.min(size + 6, box.left - 1)}px`;
+      el.style.top = `${rect.top - box.top + rect.height / 2 - size / 2}px`;
       el.style.visibility = "visible";
     }
 
@@ -389,6 +404,10 @@ export function AnnotationLayer({
       else CSS.highlights.delete(name);
     }
     placeBubbles();
+    if (revealPending.current && ranges.current.has(revealPending.current)) {
+      revealAboveSheet(ranges.current.get(revealPending.current));
+      revealPending.current = null;
+    }
   }, [annotations, composer, menu, version, supported, layoutTick, activeThread, placeBubbles, clusters, sheet, chooser]);
 
   // Les autocollants suivent le texte quand la mise en page change (largeur de fenêtre, panneaux…)
@@ -674,7 +693,8 @@ export function AnnotationLayer({
     } else {
       setActiveThread(null);
       setSheet({ mode: "thread", id: annotation.id, from });
-      revealAboveSheet(annotation.id);
+      // Le passage d'une annotation toute neuve n'est mesuré qu'à la prochaine mise en page
+      revealPending.current = annotation.id;
     }
   }
 
@@ -691,15 +711,6 @@ export function AnnotationLayer({
     const top = (id: string) => ranges.current.get(id)?.getBoundingClientRect().top ?? Infinity;
     setMenu(null);
     setSheet({ mode: "list", order: threads.map((a) => a.id).sort((a, b) => top(a) - top(b)) });
-  }
-
-  /** Le panneau couvre le bas de l'écran : le passage remonte pour rester visible au-dessus. */
-  function revealAboveSheet(id: string) {
-    const rect = ranges.current.get(id)?.getBoundingClientRect();
-    const top = 72; // sous l'en-tête fixe
-    if (rect && (rect.top < top || rect.bottom > window.innerHeight * 0.25)) {
-      window.scrollBy({ top: rect.top - top, behavior: "smooth" });
-    }
   }
 
   async function changeStatus(annotation: AnnotationRow, status: AnnotationRow["status"]) {
@@ -781,6 +792,9 @@ export function AnnotationLayer({
         );
       })}
 
+      {/* Panneau du bas ouvert : de la place sous le texte, pour pouvoir remonter n'importe quel passage au-dessus */}
+      {sheet && <div aria-hidden style={{ height: "75dvh" }} />}
+
       {/* Pastilles des annotations qui se chevauchent (placées par l'effet de mise en page) */}
       {clusters.map((group) => {
         const key = clusterKey(group);
@@ -797,27 +811,34 @@ export function AnnotationLayer({
             title={`${group.length} annotations sur ce passage`}
             aria-label={`${group.length} annotations sur ce passage`}
             data-overlap-badge
-            className="absolute z-10 flex h-[18px] items-center gap-0.5 rounded-full bg-indigo-600 px-1.5 text-[0.65rem] font-semibold leading-none text-white shadow ring-2 ring-[var(--background)] hover:bg-indigo-500"
+            className="absolute z-10 flex items-center justify-center rounded-full bg-indigo-600 text-[0.6rem] font-bold leading-none text-white shadow hover:bg-indigo-500"
             style={{ visibility: "hidden" }}
           >
-            💬 {group.length}
+            {group.length}
           </button>
         );
       })}
 
-      {/* Sans marge : bouton flottant qui ouvre toutes les discussions dans le panneau du bas */}
-      {!wide && threads.length > 0 && !sheet && (
-        <button
-          type="button"
-          {...stopGestures}
-          onClick={openList}
-          aria-label={`Voir les ${threads.length} discussions`}
-          className="fixed bottom-28 right-4 z-30 flex items-center gap-1.5 rounded-full bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white shadow-lg hover:bg-indigo-500"
-        >
-          💬 {threads.length}
-          {threads.some((a) => pending[a.id]?.running) && <span className="h-2 w-2 animate-pulse rounded-full bg-white" />}
-        </button>
-      )}
+      {/* Sans marge : bouton dans la barre du cours, qui ouvre toutes les discussions dans le panneau du bas */}
+      {!wide &&
+        threads.length > 0 &&
+        (() => {
+          const button = (
+            <button
+              type="button"
+              {...stopGestures}
+              onClick={openList}
+              aria-label={`Voir les ${threads.length} discussions`}
+              className={`flex items-center gap-1.5 rounded-full bg-indigo-600 px-2.5 py-1 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 ${
+                headerSlot ? "" : "fixed right-3 top-3 z-30"
+              }`}
+            >
+              💬 {threads.length}
+              {threads.some((a) => pending[a.id]?.running) && <span className="h-2 w-2 animate-pulse rounded-full bg-white" />}
+            </button>
+          );
+          return headerSlot ? createPortal(button, headerSlot) : button;
+        })()}
 
       {/* Fils de discussion dans la marge de droite (placés par placeBubbles) */}
       <div ref={marginRef} className="absolute top-0" style={{ display: "none" }} aria-label="Discussions dans la marge">

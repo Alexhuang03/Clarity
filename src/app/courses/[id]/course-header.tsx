@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { COURSE_FRAME, COURSE_MARGIN } from "@/components/course/layout";
 
+/** id de l'emplacement de la barre où d'autres composants ajoutent un bouton (portail React). */
+export const COURSE_HEADER_SLOT = "course-header-actions";
+
 /**
  * Barre du cours, fixée en haut pendant le défilement : retour à l'accueil et sommaire
  * toujours accessibles, même au milieu d'un long résumé. outline = bouton « Sommaire ».
@@ -39,6 +42,8 @@ export function CourseHeader({
               {title}
             </h1>
           </div>
+          {/* Emplacement rempli par la couche d'annotations (bouton « 💬 N » sur mobile) */}
+          <div id={COURSE_HEADER_SLOT} className="flex shrink-0 items-center empty:hidden" />
           {outline}
         </div>
       </div>
