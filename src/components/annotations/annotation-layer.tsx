@@ -19,7 +19,9 @@ import type { LolPrefs } from "@/lib/annotations/prefs";
 import { playSound, setVolume } from "@/lib/annotations/sound";
 import { createAnnotation, deleteAnnotation, setAnnotationStatus, updateHighlightColor } from "@/app/courses/annotation-actions";
 import { saveLolPrefs } from "@/app/account/lol-actions";
-import { KIND_LABEL, MarginBubble, ThreadView, useThreadRunner, type Actions, type Pending } from "./threads";
+import { clusterKey, overlapClusters } from "@/lib/annotations/overlap";
+import { KIND_LABEL, MarginBubble, ThreadView, useThreadRunner, type Actions } from "./threads";
+import { AnnotationList, BottomSheet } from "./sheet";
 import { buildPingItems, EmoteFx, hitTest, PING_LABELS, PING_ORDER, PingFx, preloadEmote, Wheel, type WheelHit, type WheelItem } from "./wheel";
 
 type Target = { messageId: string; anchor: Anchor; rect: DOMRect };
@@ -29,6 +31,13 @@ type Trigger = "right" | "alt" | "ctrl" | "click";
 type WheelState = { kind: WheelKind; x: number; y: number; trigger: Trigger; target: Target };
 type Composer = { kind: Exclude<PingAction, "highlight">; target: Target };
 type MenuState = { annotation: AnnotationRow; x: number; y: number };
+/** Panneau du bas (sans marge) : toutes les discussions, les annotations d'un endroit, ou un fil. */
+type SheetState =
+  | { mode: "list"; order: string[] }
+  | { mode: "choose"; ids: string[] }
+  | { mode: "thread"; id: string; from?: SheetState };
+/** Ordinateur : petite fenêtre listant les annotations qui se chevauchent à un endroit. */
+type ChooserState = { ids: string[]; x: number; y: number };
 type EffectInput = { x: number; y: number } & ({ type: "ping"; ping: PingDef } | { type: "emote"; url: string });
 type Effect = EffectInput & { id: number };
 
@@ -58,6 +67,12 @@ const BUBBLE_OFFSET = 48;
 const BUBBLE_MIN = 220;
 const BUBBLE_MAX = 300;
 const BUBBLE_GAP = 8;
+/** Place libre à droite de la colonne de texte pour les bulles. */
+const marginRoom = (box: DOMRect) => window.innerWidth - box.right - BUBBLE_OFFSET - 16;
+const subscribeResize = (onChange: () => void) => {
+  window.addEventListener("resize", onChange);
+  return () => window.removeEventListener("resize", onChange);
+};
 const noSubscription = () => () => {};
 
 function readPref<T extends string>(key: string, fallback: T, allowed?: readonly T[]): T {
@@ -190,6 +205,17 @@ export function AnnotationLayer({
   const bubbleEls = useRef(new Map<string, HTMLDivElement>());
   const bubbleObserver = useRef<ResizeObserver | null>(null);
   const { pending, run } = useThreadRunner(setAnnotations);
+  const [sheet, setSheet] = useState<SheetState | null>(null);
+  const [chooser, setChooser] = useState<ChooserState | null>(null);
+  const badges = useRef(new Map<string, HTMLButtonElement>());
+  // Marge assez large pour les bulles ? Sinon : panneau du bas et bouton « 💬 » flottant
+  const wide = useSyncExternalStore(
+    subscribeResize,
+    () => !!container.current && marginRoom(container.current.getBoundingClientRect()) >= BUBBLE_MIN,
+    () => true,
+  );
+  const clusters = useMemo(() => overlapClusters(annotations), [annotations]);
+  const threads = useMemo(() => annotations.filter((a) => isThreadKind(a.kind)), [annotations]);
   // Côté serveur on suppose le navigateur compatible (sinon le bandeau d'avertissement
   // apparaîtrait au rendu serveur puis disparaîtrait : écart d'hydratation)
   const supported = useSyncExternalStore(noSubscription, () => "highlights" in CSS, () => true);
@@ -222,7 +248,7 @@ export function AnnotationLayer({
     const layer = marginRef.current;
     if (!root || !layer) return;
     const box = root.getBoundingClientRect();
-    const room = window.innerWidth - box.right - BUBBLE_OFFSET - 16;
+    const room = marginRoom(box);
     marginOn.current = room >= BUBBLE_MIN;
     layer.style.display = marginOn.current ? "block" : "none";
     if (!marginOn.current) return;
@@ -332,7 +358,26 @@ export function AnnotationLayer({
       const range = resolve(composer.target.messageId, composer.target.anchor);
       if (range) add("ann-pending", range);
     }
-    for (const id of [menu?.annotation.id, activeThread]) {
+    // Pastille « 💬 N » au bout des passages où plusieurs annotations se chevauchent (en exposant)
+    for (const group of clusters) {
+      const el = badges.current.get(clusterKey(group));
+      const last = group.reduce((a, b) => (b.anchor.end > a.anchor.end ? b : a));
+      const rects = ranges.current.get(last.id)?.getClientRects();
+      const rect = rects?.[rects.length - 1];
+      if (!el || !rect) continue;
+      el.style.left = `${rect.right - box.left + 1}px`;
+      el.style.top = `${rect.top - box.top - 9}px`;
+      el.style.visibility = "visible";
+    }
+
+    const focused = [
+      menu?.annotation.id,
+      activeThread,
+      sheet?.mode === "thread" ? sheet.id : null,
+      ...(sheet?.mode === "choose" ? sheet.ids : []),
+      ...(chooser?.ids ?? []),
+    ];
+    for (const id of focused) {
       const range = id ? ranges.current.get(id) : undefined;
       if (range) add("ann-focus", range);
     }
@@ -344,7 +389,7 @@ export function AnnotationLayer({
       else CSS.highlights.delete(name);
     }
     placeBubbles();
-  }, [annotations, composer, menu, version, supported, layoutTick, activeThread, placeBubbles]);
+  }, [annotations, composer, menu, version, supported, layoutTick, activeThread, placeBubbles, clusters, sheet, chooser]);
 
   // Les autocollants suivent le texte quand la mise en page change (largeur de fenêtre, panneaux…)
   useEffect(() => {
@@ -495,7 +540,8 @@ export function AnnotationLayer({
         setActiveThread(null);
         return setMenu(null);
       }
-      hits.sort((a, b) => a.anchor.quote.length - b.anchor.quote.length);
+      // Plusieurs annotations au même endroit : on les liste plutôt que d'en choisir une au hasard
+      if (hits.length > 1) return openChooser(hits.map((a) => a.id), x, y);
       openAnnotation(hits[0], x, y);
     }, 0);
   }
@@ -571,6 +617,7 @@ export function AnnotationLayer({
         closeWheel();
         setMenu(null);
         setActiveThread(null);
+        setChooser(null);
       }
     };
     const keyup = (e: KeyboardEvent) => {
@@ -612,13 +659,46 @@ export function AnnotationLayer({
   }, [composer]);
 
   /** Ouvre une annotation : son fil dans la marge s'il y a la place, sinon une fenêtre près du passage. */
-  function openAnnotation(annotation: AnnotationRow, x: number, y: number) {
-    if (isThreadKind(annotation.kind) && marginOn.current) {
-      setMenu(null);
+  function openAnnotation(annotation: AnnotationRow, x: number, y: number, from?: SheetState) {
+    setChooser(null);
+    setMenu(null);
+    if (!isThreadKind(annotation.kind)) {
+      setActiveThread(null);
+      setSheet(null);
+      // Depuis une liste, la fenêtre s'ouvre près du passage
+      const rect = ranges.current.get(annotation.id)?.getBoundingClientRect();
+      setMenu({ annotation, x: from && rect ? rect.left + 20 : x, y: from && rect ? rect.bottom : y });
+    } else if (marginOn.current) {
+      setSheet(null);
       setActiveThread(annotation.id);
     } else {
       setActiveThread(null);
-      setMenu({ annotation, x, y });
+      setSheet({ mode: "thread", id: annotation.id, from });
+      revealAboveSheet(annotation.id);
+    }
+  }
+
+  /** Plusieurs annotations au même endroit : liste en fenêtre (ordinateur) ou dans le panneau du bas. */
+  function openChooser(ids: string[], x: number, y: number) {
+    setMenu(null);
+    setActiveThread(null);
+    if (marginOn.current) setChooser({ ids, x, y });
+    else setSheet({ mode: "choose", ids });
+  }
+
+  /** Toutes les discussions, dans l'ordre du texte (panneau du bas). */
+  function openList() {
+    const top = (id: string) => ranges.current.get(id)?.getBoundingClientRect().top ?? Infinity;
+    setMenu(null);
+    setSheet({ mode: "list", order: threads.map((a) => a.id).sort((a, b) => top(a) - top(b)) });
+  }
+
+  /** Le panneau couvre le bas de l'écran : le passage remonte pour rester visible au-dessus. */
+  function revealAboveSheet(id: string) {
+    const rect = ranges.current.get(id)?.getBoundingClientRect();
+    const top = 72; // sous l'en-tête fixe
+    if (rect && (rect.top < top || rect.bottom > window.innerHeight * 0.25)) {
+      window.scrollBy({ top: rect.top - top, behavior: "smooth" });
     }
   }
 
@@ -637,6 +717,7 @@ export function AnnotationLayer({
   async function removeAnnotation(annotation: AnnotationRow) {
     setMenu(null);
     setActiveThread((id) => (id === annotation.id ? null : id));
+    setSheet((sh) => (sh?.mode === "thread" && sh.id === annotation.id ? (sh.from ?? null) : sh));
     setAnnotations((list) => list.filter((a) => a.id !== annotation.id));
     await deleteAnnotation(annotation.id);
   }
@@ -653,6 +734,11 @@ export function AnnotationLayer({
     const next = !muted;
     setMuted(next);
     void saveLolPrefs({ muted: next }).then((r) => r.error && setError(r.error));
+  }
+
+  /** Choix dans la liste du panneau : « Retour » y ramène. */
+  function pickFromSheet(annotation: AnnotationRow) {
+    openAnnotation(annotation, 0, 0, sheet ?? undefined);
   }
 
   const switchKind = () =>
@@ -694,6 +780,44 @@ export function AnnotationLayer({
           </button>
         );
       })}
+
+      {/* Pastilles des annotations qui se chevauchent (placées par l'effet de mise en page) */}
+      {clusters.map((group) => {
+        const key = clusterKey(group);
+        return (
+          <button
+            key={key}
+            ref={(el) => {
+              if (el) badges.current.set(key, el);
+              else badges.current.delete(key);
+            }}
+            type="button"
+            {...stopGestures}
+            onClick={(e) => openChooser(group.map((a) => a.id), e.clientX, e.clientY)}
+            title={`${group.length} annotations sur ce passage`}
+            aria-label={`${group.length} annotations sur ce passage`}
+            data-overlap-badge
+            className="absolute z-10 flex h-[18px] items-center gap-0.5 rounded-full bg-indigo-600 px-1.5 text-[0.65rem] font-semibold leading-none text-white shadow ring-2 ring-[var(--background)] hover:bg-indigo-500"
+            style={{ visibility: "hidden" }}
+          >
+            💬 {group.length}
+          </button>
+        );
+      })}
+
+      {/* Sans marge : bouton flottant qui ouvre toutes les discussions dans le panneau du bas */}
+      {!wide && threads.length > 0 && !sheet && (
+        <button
+          type="button"
+          {...stopGestures}
+          onClick={openList}
+          aria-label={`Voir les ${threads.length} discussions`}
+          className="fixed bottom-28 right-4 z-30 flex items-center gap-1.5 rounded-full bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white shadow-lg hover:bg-indigo-500"
+        >
+          💬 {threads.length}
+          {threads.some((a) => pending[a.id]?.running) && <span className="h-2 w-2 animate-pulse rounded-full bg-white" />}
+        </button>
+      )}
 
       {/* Fils de discussion dans la marge de droite (placés par placeBubbles) */}
       <div ref={marginRef} className="absolute top-0" style={{ display: "none" }} aria-label="Discussions dans la marge">
@@ -793,20 +917,53 @@ export function AnnotationLayer({
         />
       )}
 
-      {menu &&
+      {menu && (
+        <AnnotationMenu
+          state={{ ...menu, annotation: annotations.find((a) => a.id === menu.annotation.id) ?? menu.annotation }}
+          customEmotes={prefs.customEmotes}
+          onClose={() => setMenu(null)}
+          onDelete={removeAnnotation}
+          onRecolor={recolor}
+        />
+      )}
+
+      {chooser && (
+        <ChooserPopover state={chooser} onClose={() => setChooser(null)}>
+          <AnnotationList
+            annotations={chooser.ids.map((id) => annotations.find((a) => a.id === id)).filter((a): a is AnnotationRow => !!a)}
+            pings={pings}
+            pending={pending}
+            onPick={(a) => openAnnotation(a, chooser.x, chooser.y)}
+          />
+        </ChooserPopover>
+      )}
+
+      {sheet &&
         (() => {
-          // Toujours la version à jour (la réponse de l'IA arrive pendant que la fenêtre est ouverte)
-          const current = annotations.find((a) => a.id === menu.annotation.id) ?? menu.annotation;
-          return isThreadKind(current.kind) ? (
-            <ThreadPopover
-              state={{ ...menu, annotation: current }}
-              ping={pings[current.kind]}
-              pending={pending[current.id]}
-              actions={threadActions(current)}
-              onClose={() => setMenu(null)}
-            />
-          ) : (
-            <AnnotationMenu state={{ ...menu, annotation: current }} customEmotes={prefs.customEmotes} onClose={() => setMenu(null)} onDelete={removeAnnotation} onRecolor={recolor} />
+          const byId = (id: string) => annotations.find((a) => a.id === id);
+          if (sheet.mode === "thread") {
+            const current = byId(sheet.id);
+            if (!current || !isThreadKind(current.kind)) return null;
+            return (
+              <BottomSheet title={KIND_LABEL[current.kind]} onBack={sheet.from ? () => setSheet(sheet.from!) : undefined} onClose={() => setSheet(null)}>
+                <ThreadView annotation={current} ping={pings[current.kind]} pending={pending[current.id]} actions={threadActions(current)} />
+              </BottomSheet>
+            );
+          }
+          const list =
+            sheet.mode === "list"
+              ? [...threads].sort((a, b) => {
+                  const rank = (id: string) => (sheet.order.includes(id) ? sheet.order.indexOf(id) : Infinity);
+                  return rank(a.id) - rank(b.id);
+                })
+              : sheet.ids.map(byId).filter((a): a is AnnotationRow => !!a);
+          return (
+            <BottomSheet
+              title={sheet.mode === "list" ? `Discussions (${list.length})` : `${list.length} annotations à cet endroit`}
+              onClose={() => setSheet(null)}
+            >
+              <AnnotationList annotations={list} pings={pings} pending={pending} onPick={pickFromSheet} />
+            </BottomSheet>
           );
         })()}
 
@@ -974,34 +1131,22 @@ function AnnotationMenu({
   );
 }
 
-/** Fil de discussion en fenêtre, quand la marge est trop étroite pour les bulles. */
-function ThreadPopover({
-  state,
-  ping,
-  pending,
-  actions,
-  onClose,
-}: {
-  state: MenuState;
-  ping: PingDef;
-  pending?: Pending;
-  actions: Actions;
-  onClose: () => void;
-}) {
-  const width = Math.min(380, window.innerWidth - 24);
-  const rect = new DOMRect(state.x - 20, state.y, 0, 12);
+/** Ordinateur : liste des annotations qui se chevauchent, près de l'endroit cliqué. */
+function ChooserPopover({ state, onClose, children }: { state: ChooserState; onClose: () => void; children: React.ReactNode }) {
+  const width = Math.min(340, window.innerWidth - 24);
   return (
     <>
       <div className="fixed inset-0 z-40" {...stopGestures} onPointerDown={(e) => { e.stopPropagation(); onClose(); }} />
       <div
         {...stopGestures}
-        className="fixed z-50 rounded-2xl border border-black/10 border-l-[3px] bg-[var(--background)] p-3 shadow-2xl dark:border-white/15"
-        style={{ ...popoverPosition(rect, width, 420), borderLeftColor: ping.color }}
+        className="fixed z-50 max-h-[60vh] overflow-y-auto rounded-2xl border border-black/10 bg-[var(--background)] p-3 shadow-2xl dark:border-white/15"
+        style={popoverPosition(new DOMRect(state.x - 20, state.y, 0, 12), width, 320)}
         role="dialog"
-        aria-label={KIND_LABEL[state.annotation.kind]}
+        aria-label={`${state.ids.length} annotations à cet endroit`}
         onKeyDown={(e) => e.key === "Escape" && onClose()}
       >
-        <ThreadView annotation={state.annotation} ping={ping} pending={pending} actions={actions} onClose={onClose} />
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide opacity-50">{state.ids.length} annotations à cet endroit</p>
+        {children}
       </div>
     </>
   );
