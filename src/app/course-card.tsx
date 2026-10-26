@@ -46,6 +46,7 @@ export function CourseCard({
     <div className="group relative h-full">
       <Link
         href={`/courses/${id}`}
+        transitionTypes={["nav-forward"]}
         className="flex h-full min-h-40 flex-col rounded-2xl border border-black/[0.07] bg-black/[0.015] p-5 transition hover:-translate-y-0.5 hover:border-black/15 hover:bg-black/[0.03] hover:shadow-sm dark:border-white/[0.07] dark:bg-white/[0.025] dark:hover:border-white/15 dark:hover:bg-white/[0.04]"
       >
         <span className="flex h-5 items-center gap-2 pr-24 text-xs opacity-60">

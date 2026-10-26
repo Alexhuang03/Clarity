@@ -25,7 +25,12 @@ export function CourseHeader({
     <header className="sticky top-0 z-30 border-b border-black/10 bg-[var(--background)]/85 backdrop-blur-md dark:border-white/10">
       {/* Même grille que le cours : « Mes cours » au-dessus du sommaire, titre au-dessus du texte */}
       <div className={`${COURSE_FRAME} flex items-center gap-3 py-3`}>
-        <Link href="/" className={`flex shrink-0 items-center ${COURSE_MARGIN}`} aria-label="Retour à mes cours">
+        <Link
+          href="/"
+          transitionTypes={["nav-back"]}
+          className={`flex shrink-0 items-center ${COURSE_MARGIN}`}
+          aria-label="Retour à mes cours"
+        >
           <span className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm opacity-70 hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10 xl:-ml-2">
             <span aria-hidden>←</span>
             <span className="hidden sm:inline">Mes cours</span>

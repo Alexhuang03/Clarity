@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { PageSlide } from "@/components/ui/page-slide";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -9,31 +10,33 @@ import { NewCourseForm } from "./new-course-form";
 
 export default function Home() {
   return (
-    <div className="mx-auto w-full max-w-5xl flex-1 px-4 sm:px-6">
-      <header className="flex items-center justify-between py-5">
-        <Link href="/" className="flex items-center gap-2.5 font-semibold tracking-tight">
-          <span
-            aria-hidden
-            className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-bold text-white"
-          >
-            C
-          </span>
-          Clarity
-        </Link>
-        <div className="flex items-center gap-1">
-          <ThemeToggle />
-          <Suspense fallback={<div className="h-8 w-8 rounded-full bg-black/5 dark:bg-white/10" />}>
-            <UserMenu />
-          </Suspense>
-        </div>
-      </header>
+    <PageSlide>
+      <div className="mx-auto w-full max-w-5xl flex-1 px-4 sm:px-6">
+        <header className="flex items-center justify-between py-5">
+          <Link href="/" className="flex items-center gap-2.5 font-semibold tracking-tight">
+            <span
+              aria-hidden
+              className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-bold text-white"
+            >
+              C
+            </span>
+            Clarity
+          </Link>
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            <Suspense fallback={<div className="h-8 w-8 rounded-full bg-black/5 dark:bg-white/10" />}>
+              <UserMenu />
+            </Suspense>
+          </div>
+        </header>
 
-      <main className="pb-16 pt-10 sm:pt-16">
-        <Suspense fallback={<CoursesSkeleton />}>
-          <Courses />
-        </Suspense>
-      </main>
-    </div>
+        <main className="pb-16 pt-10 sm:pt-16">
+          <Suspense fallback={<CoursesSkeleton />}>
+            <Courses />
+          </Suspense>
+        </main>
+      </div>
+    </PageSlide>
   );
 }
 
