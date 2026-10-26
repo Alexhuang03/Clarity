@@ -21,6 +21,7 @@ export const CourseOutline = memo(function CourseOutline({
   parts,
   documents,
   onDocumentsChange,
+  onDocumentsSettled,
   onNavigate,
 }: {
   messages: MessageRow[];
@@ -28,6 +29,8 @@ export const CourseOutline = memo(function CourseOutline({
   /** Documents du cours (absents sur une page partagée : les fichiers restent privés) */
   documents?: DocumentRow[];
   onDocumentsChange?: (updater: (docs: DocumentRow[]) => DocumentRow[]) => void;
+  /** Appelé une fois une suppression ou un changement de type enregistré (mise à jour des parties) */
+  onDocumentsSettled?: () => void;
   /** Appelé avant de défiler vers un titre (ex. fermer le panneau sur mobile) */
   onNavigate?: () => void;
 }) {
@@ -72,7 +75,7 @@ export const CourseOutline = memo(function CourseOutline({
           <p className="mb-2 text-[0.6875rem] font-medium uppercase tracking-[0.12em] opacity-40">
             Documents <span className="tabular-nums">({documents.length})</span>
           </p>
-          <DocumentList documents={documents} onChange={onDocumentsChange} />
+          <DocumentList documents={documents} onChange={onDocumentsChange} onSettled={onDocumentsSettled} />
         </section>
       )}
       {groups.length > 0 && <p className="mb-4 text-[0.6875rem] font-medium uppercase tracking-[0.12em] opacity-40">Sommaire</p>}

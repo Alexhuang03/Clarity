@@ -86,7 +86,16 @@ function docIcon(doc: DocumentRow) {
 }
 
 /** Documents du cours, dans le sommaire : état de lecture, type, ouvrir, réessayer, supprimer. */
-export function DocumentList({ documents, onChange }: { documents: DocumentRow[]; onChange: SetDocuments }) {
+export function DocumentList({
+  documents,
+  onChange,
+  onSettled,
+}: {
+  documents: DocumentRow[];
+  onChange: SetDocuments;
+  /** Après une suppression ou un changement de type enregistré : les parties du cours se mettent à jour */
+  onSettled?: () => void;
+}) {
   const [all, setAll] = useState(false);
   const shown = all ? documents : documents.slice(0, 6);
 
@@ -94,6 +103,7 @@ export function DocumentList({ documents, onChange }: { documents: DocumentRow[]
     if (!confirm(`Supprimer « ${doc.filename} » ?\nCe qui en a été tiré ne servira plus aux réponses.`)) return;
     onChange((docs) => docs.filter((d) => d.id !== doc.id));
     await deleteDocument(doc.id);
+    onSettled?.();
   }
   async function retry(doc: DocumentRow) {
     onChange((docs) => docs.map((d) => (d.id === doc.id ? { ...d, status: "uploaded", progress: 0, error: null } : d)));
@@ -103,6 +113,7 @@ export function DocumentList({ documents, onChange }: { documents: DocumentRow[]
     const next = doc.kind === "cours" ? "exo" : "cours";
     onChange((docs) => docs.map((d) => (d.id === doc.id ? { ...d, kind: next } : d)));
     await changeDocumentKind(doc.id, next);
+    onSettled?.();
   }
 
   if (documents.length === 0) {

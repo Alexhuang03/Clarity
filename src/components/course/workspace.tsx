@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { readStream } from "@/lib/course/read-stream";
 import type { CourseRow, DocumentRow, MessageRow, PartRow } from "@/lib/course/types";
-import { analyzeCourse } from "@/app/courses/actions";
+import { analyzeCourse, syncParts } from "@/app/courses/actions";
 import { CourseOutline } from "./course-outline";
 import { CourseHeader } from "@/app/courses/[id]/course-header";
 import { CourseColumns } from "./layout";
@@ -180,13 +180,26 @@ export function Workspace({
   const bottomRef = useRef<HTMLDivElement>(null);
   const { uploads, upload, dismiss } = useDocumentUpload({ courseId: course.id, userId, onChange: setDocuments });
 
+
   const ready = documents.filter((d) => d.status === "ready");
   const processing = documents.some((d) => d.status === "uploaded" || d.status === "parsing");
   const summarizedParts = new Set(messages.filter((m) => m.kind === "summary").map((m) => m.part_id));
   const pendingParts = parts.filter((p) => !summarizedParts.has(p.id));
-  // Des documents prêts ont été ajoutés depuis la dernière analyse
-  const outdated = !!analyzedAt && ready.some((d) => d.created_at > analyzedAt);
   const busy = !!streaming || analyzing;
+
+  // Cours déjà analysé : un document ajouté, supprimé ou changé de type met les parties à jour tout seul
+  // (nouvelles parties à la suite, parties déjà résumées intactes). Appels mis en file : jamais deux à la fois.
+  const syncing = useRef<Promise<void>>(Promise.resolve());
+  const refreshParts = useCallback(() => {
+    syncing.current = syncing.current.then(async () => {
+      const result = await syncParts(course.id);
+      if ("parts" in result && result.parts) setParts(result.parts as PartRow[]);
+    });
+  }, [course.id]);
+  const readyKey = ready.map((d) => d.id).join(",");
+  useEffect(() => {
+    if (analyzedAt) refreshParts();
+  }, [readyKey, analyzedAt, refreshParts]);
 
   // Suivi du traitement des documents en arrière-plan
   useEffect(() => {
@@ -286,10 +299,10 @@ export function Workspace({
       <CourseHeader
         title={course.title}
         subject={course.subject?.name ?? null}
-        outline={<OutlineButton messages={messages} parts={parts} documents={documents} onDocumentsChange={setDocuments} />}
+        outline={<OutlineButton messages={messages} parts={parts} documents={documents} onDocumentsChange={setDocuments} onDocumentsSettled={refreshParts} />}
       />
       <DropOverlay onFiles={upload} />
-      <CourseColumns aside={<CourseOutline messages={messages} parts={parts} documents={documents} onDocumentsChange={setDocuments} />}>
+      <CourseColumns aside={<CourseOutline messages={messages} parts={parts} documents={documents} onDocumentsChange={setDocuments} onDocumentsSettled={refreshParts} />}>
 
         <div className="flex-1 space-y-10 py-8">
           {documents.length === 0 && (
@@ -355,7 +368,7 @@ export function Workspace({
               <p className="font-medium">
                 {summarizedParts.size === 0
                   ? `Ce cours est long : je l'ai découpé en ${parts.length} parties. Par laquelle veux-tu commencer ?`
-                  : "Parties restantes :"}
+                  : "Pas encore résumé :"}
               </p>
               <ul className="mt-3 space-y-2">
                 {pendingParts.map((part) => (
@@ -375,18 +388,6 @@ export function Workspace({
             </div>
           )}
 
-          {outdated && !busy && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-500/10 px-4 py-3 text-sm">
-              <span>De nouveaux documents ont été ajoutés depuis l&apos;analyse.</span>
-              <button
-                type="button"
-                onClick={analyze}
-                className="font-medium text-amber-700 hover:underline dark:text-amber-400"
-              >
-                Relancer l&apos;analyse
-              </button>
-            </div>
-          )}
 
           {error && (
             <p role="alert" className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-400">

@@ -112,3 +112,70 @@ export async function analyzeCourse(supabase: SupabaseClient, courseId: string) 
   await supabase.from("courses").update({ analyzed_at: new Date().toISOString() }).eq("id", courseId);
   return inserted!.sort((a, b) => a.ordinal - b.ordinal);
 }
+
+/**
+ * Garde les parties à jour après l'analyse, sans rien refaire :
+ * - un document de cours ajouté (ou passé en « Cours ») devient une ou plusieurs nouvelles parties, à la suite ;
+ * - une partie jamais résumée dont tout le contenu a disparu (document supprimé ou passé en « Exercices ») est retirée ;
+ * - les parties déjà résumées ne bougent jamais (leur résumé reste lié à elles).
+ * Sans effet si rien n'a changé : peut être appelée aussi souvent que nécessaire.
+ */
+export async function syncCourseParts(supabase: SupabaseClient, courseId: string) {
+  const [{ data: course }, { data: documents }, { data: existing }, { data: summaries }] = await Promise.all([
+    supabase.from("courses").select("id, user_id, analyzed_at").eq("id", courseId).maybeSingle(),
+    supabase.from("documents").select("id, kind, created_at").eq("course_id", courseId).eq("status", "ready").order("created_at"),
+    supabase.from("course_parts").select("id, ordinal, title, chunk_ids").eq("course_id", courseId).order("ordinal"),
+    supabase.from("messages").select("part_id").eq("course_id", courseId).eq("kind", "summary").not("part_id", "is", null),
+  ]);
+  const listParts = async () =>
+    ((await supabase.from("course_parts").select("id, ordinal, title").eq("course_id", courseId).order("ordinal")).data ?? []);
+  // Pas encore analysé : c'est la première analyse (bouton) qui découpera le cours
+  if (!course?.analyzed_at || !documents?.length) return listParts();
+
+  // Mêmes documents que la première analyse : ceux de cours (ou tous, s'il n'y a que des exercices)
+  const coursIds = documents.filter((d) => d.kind === "cours").map((d) => d.id);
+  const ids = coursIds.length ? coursIds : documents.map((d) => d.id);
+  const { data: chunks, error } = await supabase
+    .from("chunks")
+    .select("id, document_id, section, content, ordinal")
+    .in("document_id", ids)
+    .order("ordinal");
+  if (error) throw error;
+  const valid = new Map((chunks ?? []).map((c) => [c.id, c as ChunkRow]));
+  const summarized = new Set((summaries ?? []).map((m) => m.part_id));
+
+  // 1. Parties sans résumé et sans plus aucun contenu : retirées
+  const parts = existing ?? [];
+  const orphans = parts.filter((p) => !summarized.has(p.id) && !p.chunk_ids.some((id: string) => valid.has(id)));
+  if (orphans.length) await supabase.from("course_parts").delete().in("id", orphans.map((p) => p.id));
+  const kept = parts.filter((p) => !orphans.includes(p));
+
+  // 2. Contenu de cours qui n'appartient à aucune partie : nouvelles parties, document par document
+  const covered = new Set(kept.flatMap((p) => p.chunk_ids as string[]));
+  const fresh: ChunkRow[][] = [];
+  for (const id of ids) {
+    const uncovered = (chunks ?? []).filter((c) => c.document_id === id && !covered.has(c.id)) as ChunkRow[];
+    if (uncovered.length) fresh.push(...groupIntoParts(uncovered));
+  }
+  if (!fresh.length) return listParts();
+
+  // Le cours avait une seule partie « Cours complet » : avec les nouvelles, elle reçoit un vrai titre
+  const lone = kept.length === 1 && kept[0].title === "Cours complet" ? kept[0] : null;
+  const loneChunks = lone ? (lone.chunk_ids as string[]).map((id) => valid.get(id)).filter((c): c is ChunkRow => !!c) : [];
+  const titles = await titleParts(lone && loneChunks.length ? [loneChunks, ...fresh] : fresh);
+  if (lone && loneChunks.length) await supabase.from("course_parts").update({ title: titles.shift() }).eq("id", lone.id);
+
+  const start = Math.max(-1, ...kept.map((p) => p.ordinal)) + 1;
+  const { error: insertError } = await supabase.from("course_parts").insert(
+    fresh.map((p, i) => ({
+      user_id: course.user_id,
+      course_id: courseId,
+      ordinal: start + i,
+      title: titles[i],
+      chunk_ids: p.map((c) => c.id),
+    })),
+  );
+  if (insertError) throw insertError;
+  console.info(`[analyse] ${fresh.length} nouvelle(s) partie(s) ajoutée(s) au cours ${courseId}`);
+  return listParts();
+}

@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { analyzeCourse as runAnalysis } from "@/lib/course/analyze";
+import { analyzeCourse as runAnalysis, syncCourseParts } from "@/lib/course/analyze";
 import { enqueueDocument } from "@/lib/ingest/queue";
 import { createClient } from "@/lib/supabase/server";
 
@@ -201,4 +201,19 @@ export async function unshareCourse(courseId: string) {
   await getCurrentUser();
   const supabase = await createClient();
   await supabase.from("course_shares").delete().eq("course_id", courseId);
+}
+
+/**
+ * Met à jour les parties d'un cours déjà analysé (document ajouté, supprimé ou changé de type),
+ * sans toucher aux parties déjà résumées. Renvoie les parties à jour.
+ */
+export async function syncParts(courseId: string) {
+  await getCurrentUser();
+  const supabase = await createClient();
+  try {
+    return { parts: await syncCourseParts(supabase, courseId) };
+  } catch (error) {
+    console.error("[analyse] mise à jour des parties échouée", error);
+    return { error: "Les nouvelles parties n'ont pas pu être créées." };
+  }
 }

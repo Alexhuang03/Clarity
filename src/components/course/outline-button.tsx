@@ -14,12 +14,14 @@ export function OutlineButton({
   parts,
   documents,
   onDocumentsChange,
+  onDocumentsSettled,
   className = "",
 }: {
   messages: MessageRow[];
   parts: PartRow[];
   documents?: DocumentRow[];
   onDocumentsChange?: (updater: (docs: DocumentRow[]) => DocumentRow[]) => void;
+  onDocumentsSettled?: () => void;
   className?: string;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -75,7 +77,7 @@ export function OutlineButton({
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto px-6 pb-8">
-                <CourseOutline messages={messages} parts={parts} documents={documents} onDocumentsChange={onDocumentsChange} onNavigate={close} />
+                <CourseOutline messages={messages} parts={parts} documents={documents} onDocumentsChange={onDocumentsChange} onDocumentsSettled={onDocumentsSettled} onNavigate={close} />
               </div>
             </div>
           </dialog>,
