@@ -86,6 +86,7 @@ Reste concis : environ 250 mots maximum, sauf si l'étudiant demande plus de dé
 const APP_GUIDE = `FONCTIONNALITÉS DE CLARITY
 - Créer un cours (titre + matière), le modifier ou le supprimer depuis l'accueil (crayon) ou la page du cours.
 - Ajouter des fichiers de cours ou d'exercices : PDF, Word, PowerPoint, Markdown, texte, images (50 Mo max), avec le bouton + à gauche de la barre de questions (ou en glissant les fichiers sur la page ; sur téléphone, « Prendre une photo »). L'IA les lit, y compris formules et schémas.
+- Ajouter un cours en ligne par son lien : bouton + puis « Ajouter un lien », ou coller le lien seul dans la barre de questions. Marche avec les pages web (Wikipédia, cours en ligne), les PDF, Word, PowerPoint et images en ligne, Google Drive et Google Docs partagés « à tous ceux qui ont le lien », Dropbox. Ne marche pas avec les pages qui demandent une connexion (ENT, Moodle) : il faut alors télécharger le fichier puis l'ajouter avec +.
 - Les documents importés sont listés dans le sommaire (marge de gauche, ou bouton « Sommaire » sur téléphone) : état de lecture, ouvrir le fichier, passer de « Cours » à « Exercices », réessayer, supprimer.
 - « Analyser et résumer le cours » : résumé détaillé pour débutant, avec sommaire. Un cours long est découpé en parties au choix.
 - Chaque explication cite ses sources (pastilles numérotées) : un clic ouvre le document original à la bonne page.

@@ -10,6 +10,8 @@ export type DocumentRow = {
   progress: number;
   page_count: number | null;
   error: string | null;
+  /** Document importé depuis un lien : adresse d'origine */
+  source_url?: string | null;
   created_at: string;
 };
 

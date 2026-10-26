@@ -36,7 +36,7 @@ async function CourseContent({ params }: { params: Promise<{ id: string }> }) {
         .maybeSingle(),
       supabase
         .from("documents")
-        .select("id, filename, kind, mime_type, status, progress, page_count, error, created_at")
+        .select("id, filename, kind, mime_type, status, progress, page_count, error, source_url, created_at")
         .eq("course_id", id)
         .order("created_at"),
       supabase.from("course_parts").select("id, ordinal, title").eq("course_id", id).order("ordinal"),

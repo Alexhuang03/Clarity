@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
 import { analyzeCourse as runAnalysis, syncCourseParts } from "@/lib/course/analyze";
 import { enqueueDocument } from "@/lib/ingest/queue";
+import { UserFacingError } from "@/lib/ingest/extract";
+import { fetchLink } from "@/lib/ingest/link";
 import { createClient } from "@/lib/supabase/server";
 
 export async function createCourse(
@@ -167,8 +169,10 @@ export async function analyzeCourse(courseId: string) {
 export async function getDocumentUrl(documentId: string) {
   await getCurrentUser();
   const supabase = await createClient();
-  const { data: doc } = await supabase.from("documents").select("storage_path").eq("id", documentId).maybeSingle();
+  const { data: doc } = await supabase.from("documents").select("storage_path, source_url, mime_type").eq("id", documentId).maybeSingle();
   if (!doc) return null;
+  // Page web importée par lien : on ouvre la page d'origine plutôt que le texte qui en a été tiré
+  if (doc.source_url && doc.mime_type === "text/markdown") return doc.source_url as string;
   const { data } = await supabase.storage.from("documents").createSignedUrl(doc.storage_path, 600);
   return data?.signedUrl ?? null;
 }
@@ -216,4 +220,49 @@ export async function syncParts(courseId: string) {
     console.error("[analyse] mise à jour des parties échouée", error);
     return { error: "Les nouvelles parties n'ont pas pu être créées." };
   }
+}
+
+/**
+ * Ajoute un document à partir d'un lien (page web, PDF en ligne, Google Drive / Docs, Dropbox…) :
+ * le serveur le récupère, le range dans le stockage comme un fichier envoyé, puis le fait lire par l'IA.
+ */
+export async function addLink(input: { courseId: string; url: string; kind: "cours" | "exo" }) {
+  const user = await getCurrentUser();
+  const supabase = await createClient();
+  const url = String(input.url ?? "").trim().slice(0, 2000);
+  // RLS : le cours doit être à l'utilisateur
+  const { data: course } = await supabase.from("courses").select("id").eq("id", input.courseId).maybeSingle();
+  if (!course) return { error: "Cours introuvable." };
+  const { data: duplicate } = await supabase.from("documents").select("id").eq("course_id", course.id).eq("source_url", url).limit(1);
+  if (duplicate?.length) return { error: "Ce lien est déjà dans le cours." };
+
+  let fetched;
+  try {
+    fetched = await fetchLink(url);
+  } catch (error) {
+    if (!(error instanceof UserFacingError)) console.error("[lien] récupération échouée", url, error);
+    return { error: error instanceof UserFacingError ? error.message : "Impossible de récupérer ce lien." };
+  }
+
+  const path = `${user.id}/${course.id}/${crypto.randomUUID()}.${fetched.ext}`;
+  const { error: uploadError } = await supabase.storage.from("documents").upload(path, fetched.data, { contentType: fetched.mimeType });
+  if (uploadError) return { error: "Le contenu n'a pas pu être enregistré." };
+  const { data: doc, error } = await supabase
+    .from("documents")
+    .insert({
+      course_id: course.id,
+      storage_path: path,
+      filename: fetched.filename,
+      mime_type: fetched.mimeType,
+      kind: input.kind === "exo" ? "exo" : "cours",
+      source_url: url,
+    })
+    .select()
+    .single();
+  if (error || !doc) {
+    await supabase.storage.from("documents").remove([path]);
+    return { error: "Impossible d'enregistrer le document." };
+  }
+  enqueueDocument(doc.id);
+  return { document: doc };
 }

@@ -83,6 +83,7 @@ function ChatInput({
   onSend,
   context,
   onFiles,
+  onLink,
   uploads,
   documents,
   onDismissUpload,
@@ -94,6 +95,7 @@ function ChatInput({
   context: string;
   /** Bouton + : ajout de documents */
   onFiles: (files: File[], kind: DocKind) => void;
+  onLink: (url: string, kind: DocKind) => Promise<boolean>;
   uploads: Upload[];
   documents: DocumentRow[];
   onDismissUpload: (id: string) => void;
@@ -103,6 +105,12 @@ function ChatInput({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const content = value.trim();
+    // Un lien seul, collé dans la barre : c'est un cours à ajouter (même sans document encore)
+    if (/^https?:\/\/\S+$/i.test(content)) {
+      setValue("");
+      if (!(await onLink(content, "cours"))) setValue(content);
+      return;
+    }
     if (!content || busy || disabled) return;
     setValue("");
     if (!(await onSend(content))) setValue(content);
@@ -116,7 +124,7 @@ function ChatInput({
         onSubmit={submit}
         className="mx-auto flex max-w-[40rem] items-end gap-2 rounded-[1.6rem] border border-black/10 bg-[var(--background)] p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition focus-within:border-indigo-500/50 dark:border-white/10 dark:bg-[#151515] dark:shadow-[0_8px_30px_rgba(0,0,0,0.6)]"
       >
-        <AddDocumentsButton onFiles={onFiles} />
+        <AddDocumentsButton onFiles={onFiles} onLink={onLink} />
         <textarea
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -178,7 +186,7 @@ export function Workspace({
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const { uploads, upload, dismiss } = useDocumentUpload({ courseId: course.id, userId, onChange: setDocuments });
+  const { uploads, upload, addFromLink, dismiss } = useDocumentUpload({ courseId: course.id, userId, onChange: setDocuments });
 
 
   const ready = documents.filter((d) => d.status === "ready");
@@ -207,7 +215,7 @@ export function Workspace({
     const timer = setInterval(async () => {
       const { data } = await supabase
         .from("documents")
-        .select("id, filename, kind, mime_type, status, progress, page_count, error, created_at")
+        .select("id, filename, kind, mime_type, status, progress, page_count, error, source_url, created_at")
         .eq("course_id", course.id)
         .order("created_at");
       if (data) setDocuments(data as DocumentRow[]);
@@ -403,6 +411,7 @@ export function Workspace({
           onSend={ask}
           context={`Questions sur ce cours · réponses tirées de ${ready.length > 1 ? `tes ${ready.length} documents` : "ton document"}`}
           onFiles={upload}
+          onLink={addFromLink}
           uploads={uploads}
           documents={documents}
           onDismissUpload={dismiss}

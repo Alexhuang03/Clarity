@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { DocumentRow } from "@/lib/course/types";
-import { changeDocumentKind, deleteDocument, getDocumentUrl, registerDocument, retryDocument } from "@/app/courses/actions";
+import { addLink, changeDocumentKind, deleteDocument, getDocumentUrl, registerDocument, retryDocument } from "@/app/courses/actions";
 
 export type DocKind = "cours" | "exo";
-export type Upload = { id: string; name: string; error?: string };
+export type Upload = { id: string; name: string; error?: string; link?: boolean };
 type SetDocuments = (updater: (docs: DocumentRow[]) => DocumentRow[]) => void;
 
 const MAX_SIZE = 50 * 1024 * 1024;
@@ -65,8 +65,33 @@ export function useDocumentUpload({ courseId, userId, onChange }: { courseId: st
     [courseId, userId, onChange, supabase],
   );
 
+  /** Lien vers un cours en ligne : le serveur le récupère. Renvoie false en cas d'échec (message affiché). */
+  const addFromLink = useCallback(
+    async (url: string, kind: DocKind) => {
+      const id = crypto.randomUUID();
+      let name = url;
+      try {
+        const u = new URL(url);
+        name = `${u.hostname.replace(/^www\./, "")}${u.pathname.length > 1 ? u.pathname : ""}`;
+      } catch {
+        /* lien invalide : le serveur répondra avec un message clair */
+      }
+      setUploads((list) => [...list, { id, name, link: true }]);
+      const result = await addLink({ courseId, url, kind }).catch(() => ({ error: "Connexion perdue. Réessaie." }));
+      if ("error" in result && result.error) {
+        const error = result.error;
+        setUploads((list) => list.map((x) => (x.id === id ? { ...x, error } : x)));
+        return false;
+      }
+      setUploads((list) => list.filter((x) => x.id !== id));
+      if ("document" in result && result.document) onChange((docs) => [...docs, result.document as DocumentRow]);
+      return true;
+    },
+    [courseId, onChange],
+  );
+
   const dismiss = useCallback((id: string) => setUploads((u) => u.filter((x) => x.id !== id)), []);
-  return { uploads, upload, dismiss };
+  return { uploads, upload, addFromLink, dismiss };
 }
 
 /** Ouvre le document original dans un nouvel onglet. */
@@ -79,6 +104,7 @@ async function openDocument(doc: DocumentRow) {
 }
 
 function docIcon(doc: DocumentRow) {
+  if (doc.source_url) return "🔗";
   if (doc.mime_type.startsWith("image/")) return "🖼️";
   if (doc.mime_type === "application/pdf") return "📕";
   if (doc.filename.toLowerCase().endsWith(".pptx")) return "📊";
@@ -134,7 +160,7 @@ export function DocumentList({
                 type="button"
                 onClick={() => doc.status === "ready" && void openDocument(doc)}
                 disabled={doc.status !== "ready"}
-                title={doc.status === "ready" ? `Ouvrir ${doc.filename}` : doc.filename}
+                title={doc.source_url ? `${doc.filename}\n${doc.source_url}` : doc.status === "ready" ? `Ouvrir ${doc.filename}` : doc.filename}
                 className="min-w-0 flex-1 truncate text-left enabled:hover:text-indigo-600 enabled:hover:underline dark:enabled:hover:text-indigo-300"
               >
                 {doc.filename}
@@ -197,8 +223,18 @@ export function DocumentList({
  * Bouton + de la barre de chat : ajouter un cours, des exercices, ou une photo (téléphone).
  * Le menu s'ouvre au-dessus de la barre.
  */
-export function AddDocumentsButton({ onFiles }: { onFiles: (files: File[], kind: DocKind) => void }) {
+export function AddDocumentsButton({
+  onFiles,
+  onLink,
+}: {
+  onFiles: (files: File[], kind: DocKind) => void;
+  /** Ajout d'un cours en ligne (page web, PDF, Google Drive...) */
+  onLink: (url: string, kind: DocKind) => Promise<boolean>;
+}) {
   const [open, setOpen] = useState(false);
+  const [linkMode, setLinkMode] = useState(false);
+  const [link, setLink] = useState("");
+  const [linkKind, setLinkKind] = useState<DocKind>("cours");
   const input = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
   const kind = useRef<DocKind>("cours");
@@ -207,8 +243,8 @@ export function AddDocumentsButton({ onFiles }: { onFiles: (files: File[], kind:
   // Un clic ailleurs ou Échap referme le menu
   useEffect(() => {
     if (!open) return;
-    const down = (e: PointerEvent) => !root.current?.contains(e.target as Node) && setOpen(false);
-    const key = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const down = (e: PointerEvent) => !root.current?.contains(e.target as Node) && close();
+    const key = (e: KeyboardEvent) => e.key === "Escape" && close();
     window.addEventListener("pointerdown", down);
     window.addEventListener("keydown", key);
     return () => {
@@ -216,6 +252,19 @@ export function AddDocumentsButton({ onFiles }: { onFiles: (files: File[], kind:
       window.removeEventListener("keydown", key);
     };
   }, [open]);
+
+  function close() {
+    setOpen(false);
+    setLinkMode(false);
+  }
+  async function submitLink() {
+    const url = link.trim();
+    if (!url) return;
+    close();
+    setLink("");
+    // En cas d'échec, le message s'affiche au-dessus de la barre ; le lien est rendu pour le corriger
+    if (!(await onLink(url, linkKind))) setLink(url);
+  }
 
   const pick = (k: DocKind, from: "files" | "camera") => {
     kind.current = k;
@@ -233,7 +282,7 @@ export function AddDocumentsButton({ onFiles }: { onFiles: (files: File[], kind:
     <div ref={root} className="relative shrink-0">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => (open ? close() : setOpen(true))}
         aria-label="Ajouter des documents"
         aria-expanded={open}
         aria-haspopup="menu"
@@ -242,7 +291,63 @@ export function AddDocumentsButton({ onFiles }: { onFiles: (files: File[], kind:
       >
         +
       </button>
-      {open && (
+      {open && linkMode && (
+        // Pas de <form> : ce menu est déjà dans le formulaire de la barre de chat (formulaires imbriqués interdits)
+        <div
+          role="form"
+          aria-label="Ajouter un lien"
+          className="absolute bottom-full left-0 z-20 mb-2 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-black/10 bg-[var(--background)] p-3 shadow-xl dark:border-white/15"
+        >
+          <p className="text-sm font-medium">🔗 Ajouter un lien</p>
+          <p className="mt-0.5 text-xs opacity-60">
+            Page web, PDF en ligne, Google Drive ou Docs (partagé « à tous ceux qui ont le lien »), Dropbox…
+          </p>
+          <input
+            autoFocus
+            type="url"
+            inputMode="url"
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void submitLink();
+              }
+            }}
+            placeholder="https://…"
+            aria-label="Adresse du cours"
+            className="mt-2 w-full rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-indigo-500 dark:border-white/20"
+          />
+          <div className="mt-2 flex items-center gap-1.5">
+            {(["cours", "exo"] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setLinkKind(k)}
+                aria-pressed={linkKind === k}
+                className={`rounded-full border px-2.5 py-0.5 text-xs ${
+                  linkKind === k ? "border-indigo-500 bg-indigo-500/10 font-medium" : "border-black/15 dark:border-white/20"
+                }`}
+              >
+                {KIND_LABEL[k]}
+              </button>
+            ))}
+            <span className="flex-1" />
+            <button type="button" onClick={() => setLinkMode(false)} className="rounded-lg px-2 py-1 text-xs opacity-60 hover:opacity-100">
+              Retour
+            </button>
+            <button
+              type="button"
+              onClick={() => void submitLink()}
+              disabled={!link.trim()}
+              className="rounded-lg bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
+            >
+              Ajouter
+            </button>
+          </div>
+        </div>
+      )}
+      {open && !linkMode && (
         <div role="menu" className="absolute bottom-full left-0 z-20 mb-2 w-64 rounded-xl border border-black/10 bg-[var(--background)] p-1.5 shadow-xl dark:border-white/15">
           <button type="button" role="menuitem" className={item} onClick={() => pick("cours", "files")}>
             <span aria-hidden>📘</span>
@@ -258,12 +363,19 @@ export function AddDocumentsButton({ onFiles }: { onFiles: (files: File[], kind:
               <span className="block text-xs opacity-60">Sujets, TD, annales, corrigés</span>
             </span>
           </button>
+          <button type="button" role="menuitem" className={item} onClick={() => setLinkMode(true)}>
+            <span aria-hidden>🔗</span>
+            <span>
+              <span className="block font-medium">Ajouter un lien</span>
+              <span className="block text-xs opacity-60">Page web, PDF en ligne, Google Drive</span>
+            </span>
+          </button>
           {/* Sur téléphone : photographier directement une page */}
           <button type="button" role="menuitem" className={`${item} hidden [@media(pointer:coarse)]:flex`} onClick={() => pick("cours", "camera")}>
             <span aria-hidden>📷</span>
             <span className="font-medium">Prendre une photo</span>
           </button>
-          <p className="px-3 pb-1 pt-1.5 text-[0.6875rem] opacity-50">Astuce : tu peux aussi glisser tes fichiers sur la page. 50 Mo max.</p>
+          <p className="px-3 pb-1 pt-1.5 text-[0.6875rem] opacity-50">Astuce : glisse tes fichiers sur la page, ou colle un lien dans la barre. 50 Mo max.</p>
         </div>
       )}
       <input ref={input} type="file" multiple accept={ACCEPT} className="hidden" onChange={take} />
@@ -288,10 +400,10 @@ export function UploadChips({
   return (
     <ul className="mx-auto mb-2 flex max-w-[40rem] flex-wrap gap-1.5" aria-live="polite" aria-label="Documents en cours">
       {uploads.map((u) => (
-        <li key={u.id} className={`${chip} ${u.error ? "border-red-500/40 text-red-700 dark:text-red-400" : "border-black/10 dark:border-white/15"}`}>
+        <li key={u.id} title={u.error} className={`${chip} ${u.error ? "max-w-full" : ""} ${u.error ? "border-red-500/40 text-red-700 dark:text-red-400" : "border-black/10 dark:border-white/15"}`}>
           {u.error ? <span aria-hidden>⚠</span> : <span aria-hidden className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />}
           <span className="truncate">{u.name}</span>
-          <span className="shrink-0 opacity-70">{u.error ?? "envoi…"}</span>
+          <span className={u.error ? "min-w-0 opacity-80" : "shrink-0 opacity-70"}>{u.error ?? (u.link ? "récupération…" : "envoi…")}</span>
           {u.error && (
             <button type="button" onClick={() => onDismiss(u.id)} aria-label="Masquer" className="shrink-0 opacity-60 hover:opacity-100">
               ✕
