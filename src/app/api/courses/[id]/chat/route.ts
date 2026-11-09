@@ -14,6 +14,7 @@ const MAX_QUESTION = 4000;
 const HISTORY = 6;
 const HISTORY_MESSAGE_MAX = 1500;
 const MAX_SOURCES = 6;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const INTENT_LABEL: Record<Intent, string> = {
   cours: "question sur le cours",
@@ -25,29 +26,38 @@ const INTENT_LABEL: Record<Intent, string> = {
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: courseId } = await params;
-  const { content: rawQuestion } = (await request.json()) as { content?: string };
+  const { content: rawQuestion, rewindFrom } = (await request.json()) as { content?: string; rewindFrom?: string };
   const question = rawQuestion?.trim().slice(0, MAX_QUESTION);
   if (!question) return Response.json({ error: "Question vide" }, { status: 400 });
+  if (rewindFrom !== undefined && (typeof rewindFrom !== "string" || !UUID.test(rewindFrom))) {
+    return Response.json({ error: "Message introuvable" }, { status: 400 });
+  }
 
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getClaims();
   if (!auth?.claims) return Response.json({ error: "Non connecté" }, { status: 401 });
 
-  // Contexte du cours et historique lus en parallèle (l'historique avant d'enregistrer la nouvelle question)
-  const [ctx, { data: recent }] = await Promise.all([
-    loadCourseContext(supabase, courseId),
+  const readHistory = () =>
     supabase
       .from("messages")
       .select("role, content")
       .eq("course_id", courseId)
       .eq("kind", "chat")
       .order("created_at", { ascending: false })
-      .limit(HISTORY),
-  ]);
+      .limit(HISTORY);
+
+  // Contexte du cours et historique lus en parallèle (l'historique avant d'enregistrer la nouvelle question).
+  // Retour en arrière : l'historique est relu après avoir retiré la suite de la conversation.
+  const [ctx, first] = await Promise.all([loadCourseContext(supabase, courseId), rewindFrom ? null : readHistory()]);
   if (!ctx) return Response.json({ error: "Cours introuvable" }, { status: 404 });
   if (ctx.documents.length === 0) {
     return Response.json({ error: "Ajoute d'abord un document à ce cours." }, { status: 409 });
   }
+  if (rewindFrom) {
+    const rewound = await rewind(supabase, courseId, rewindFrom);
+    if (rewound) return Response.json({ error: rewound }, { status: 409 });
+  }
+  const { data: recent } = first ?? (await readHistory());
   const history: ChatMessage[] = (recent ?? []).reverse().map((m) => ({
     role: m.role as ChatMessage["role"],
     content: m.content.length > HISTORY_MESSAGE_MAX ? `${m.content.slice(0, HISTORY_MESSAGE_MAX)}…` : m.content,
@@ -149,4 +159,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (error) throw error;
     send({ type: "done", message });
   });
+}
+
+/**
+ * Retour à une question précédente : cette question et toute la suite de la discussion sont supprimées
+ * (avec leurs annotations), la nouvelle version prend leur place. Les résumés du cours ne sont jamais touchés.
+ * Renvoie un message d'erreur, ou null si tout s'est bien passé.
+ */
+async function rewind(supabase: Awaited<ReturnType<typeof createClient>>, courseId: string, messageId: string) {
+  const { data: from } = await supabase
+    .from("messages")
+    .select("created_at")
+    .eq("id", messageId)
+    .eq("course_id", courseId)
+    .eq("role", "user")
+    .eq("kind", "chat")
+    .maybeSingle();
+  if (!from) return "Ce message n'existe plus. Recharge la page.";
+  const { error } = await supabase
+    .from("messages")
+    .delete()
+    .eq("course_id", courseId)
+    .eq("kind", "chat")
+    .gte("created_at", from.created_at);
+  return error ? "Impossible de revenir à ce message. Réessaie." : null;
 }

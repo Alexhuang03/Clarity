@@ -3,6 +3,7 @@ import { embed } from "@/lib/ai/gemini";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { chunkPages } from "./chunk";
 import { extractDocument, UserFacingError } from "./extract";
+import { describeFigures } from "./figures";
 
 /**
  * Traite un document uploadé : extraction du texte, découpage, embeddings.
@@ -27,6 +28,14 @@ export async function processDocument(documentId: string) {
     const { pages, pageCount } = await extractDocument(bytes, doc.mime_type, doc.filename, async (progress) => {
       await setStatus({ progress });
     });
+    // Cours en Markdown (lien GitHub, page web...) : les schémas sont décrits par l'IA, sinon elle ne voit que leur nom
+    if (doc.mime_type === "text/markdown" || /\.md$/i.test(doc.filename)) {
+      for (const page of pages) {
+        page.text = await describeFigures(page.text, async (done, total) => {
+          await setStatus({ progress: 5 + Math.round((75 * done) / total) });
+        });
+      }
+    }
     const chunks = chunkPages(pages);
     if (chunks.length === 0) throw new UserFacingError("Aucun texte trouvé dans ce fichier.");
     await setStatus({ progress: 85 });

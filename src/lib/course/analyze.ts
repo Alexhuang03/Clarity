@@ -43,6 +43,25 @@ function groupIntoParts(chunks: ChunkRow[]): ChunkRow[][] {
   return parts;
 }
 
+// Un fichier plus court que ça (une fiche d'une demi-page) rejoint la partie précédente plutôt que d'avoir son résumé
+const MIN_DOCUMENT_PART = 1500;
+
+/**
+ * Parties du cours, fichier par fichier : un fichier de cours (un chapitre) n'est jamais mélangé à un autre,
+ * sinon le résumé du chapitre 2 reprendrait le contenu du chapitre 1. Un long fichier est découpé en plusieurs parties.
+ */
+function partsByDocument(chunks: ChunkRow[], documentIds: string[]): ChunkRow[][] {
+  const parts: ChunkRow[][] = [];
+  for (const id of documentIds) {
+    const own = chunks.filter((c) => c.document_id === id);
+    if (!own.length) continue;
+    const size = own.reduce((n, c) => n + c.content.length, 0);
+    if (size < MIN_DOCUMENT_PART && parts.length) parts[parts.length - 1].push(...own);
+    else parts.push(...groupIntoParts(own));
+  }
+  return parts;
+}
+
 function sectionsOf(part: ChunkRow[]) {
   return [...new Set(part.map((c) => c.section).filter((s): s is string => !!s))];
 }
@@ -99,7 +118,7 @@ export async function analyzeCourse(supabase: SupabaseClient, courseId: string) 
     (a, b) => docOrder.get(a.document_id)! - docOrder.get(b.document_id)! || a.ordinal - b.ordinal,
   );
 
-  const parts = groupIntoParts(ordered);
+  const parts = partsByDocument(ordered, ids);
   const titles = parts.length === 1 ? ["Cours complet"] : await titleParts(parts);
 
   // Nouvelle analyse : les anciennes parties sont remplacées (les messages déjà générés restent)

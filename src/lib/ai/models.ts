@@ -16,7 +16,7 @@ const FLASH: ModelId[] = ["gemini:gemini-3.6-flash", "gemini:gemini-3.5-flash", 
 const FLASH_LITE: ModelId[] = ["gemini:gemini-3.1-flash-lite", "gemini:gemini-3.5-flash-lite", "gemini:gemini-flash-lite-latest"];
 
 // Chaînes de secours : si un modèle échoue (quota, surcharge, délai), on passe au suivant.
-const CHAINS: Record<"summary" | "chat" | "light" | "analysis" | "vision", ModelId[]> = {
+const CHAINS: Record<"summary" | "chat" | "light" | "analysis" | "vision" | "figures", ModelId[]> = {
   // Résumés : gros contexte et bonne qualité d'explication (Groq gratuit : 8 000 tokens/min, trop peu pour une partie)
   summary: [...FLASH, FLASH_LITE[0], "groq:openai/gpt-oss-120b"],
   // Questions : rapidité d'abord
@@ -27,6 +27,9 @@ const CHAINS: Record<"summary" | "chat" | "light" | "analysis" | "vision", Model
   light: [FLASH_LITE[0], "groq:openai/gpt-oss-20b", FLASH_LITE[1], FLASH[0]],
   // Lecture des PDF et des images (multimodal : Gemini uniquement)
   vision: [...FLASH, FLASH_LITE[0]],
+  // Description des schémas d'un cours en ligne : Flash-Lite suffit, et préserve le quota gratuit
+  // de Flash (20 requêtes par jour seulement), réservé aux résumés
+  figures: [...FLASH_LITE, FLASH[1]],
 };
 
 const KEYS: Record<string, string | undefined> = {

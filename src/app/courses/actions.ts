@@ -266,3 +266,33 @@ export async function addLink(input: { courseId: string; url: string; kind: "cou
   enqueueDocument(doc.id);
   return { document: doc };
 }
+
+/**
+ * Retire une question de la discussion, avec sa réponse (et les annotations de celle-ci).
+ * Le reste de la conversation et les résumés ne bougent pas. Renvoie les messages supprimés.
+ */
+export async function deleteExchange(messageId: string): Promise<{ deleted?: string[]; error?: string }> {
+  await getCurrentUser();
+  const supabase = await createClient();
+  const { data: question } = await supabase
+    .from("messages")
+    .select("id, course_id, created_at")
+    .eq("id", messageId)
+    .eq("role", "user")
+    .eq("kind", "chat")
+    .maybeSingle();
+  if (!question) return { error: "Ce message n'existe plus. Recharge la page." };
+  // Sa réponse : le message de discussion qui suit, s'il vient de l'IA (absent si la réponse avait échoué)
+  const { data: next } = await supabase
+    .from("messages")
+    .select("id, role")
+    .eq("course_id", question.course_id)
+    .eq("kind", "chat")
+    .gt("created_at", question.created_at)
+    .order("created_at")
+    .limit(1)
+    .maybeSingle();
+  const ids = next?.role === "assistant" ? [question.id, next.id] : [question.id];
+  const { error } = await supabase.from("messages").delete().in("id", ids);
+  return error ? { error: "Impossible de retirer ce message. Réessaie." } : { deleted: ids };
+}

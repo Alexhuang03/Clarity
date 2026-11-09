@@ -1,10 +1,10 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { readStream } from "@/lib/course/read-stream";
 import type { CourseRow, DocumentRow, MessageRow, PartRow } from "@/lib/course/types";
-import { analyzeCourse, syncParts } from "@/app/courses/actions";
+import { analyzeCourse, deleteExchange, syncParts } from "@/app/courses/actions";
 import { CourseOutline } from "./course-outline";
 import { CourseHeader } from "@/app/courses/[id]/course-header";
 import { CourseColumns } from "./layout";
@@ -17,6 +17,12 @@ import type { LolPrefs } from "@/lib/annotations/prefs";
 import { ThinkingPanel } from "./thinking-panel";
 
 type Streaming = { kind: "summary" | "chat"; partId?: string; content: string; thinking: string } | null;
+
+/** Retour à une question précédente : elle revient dans la barre, la suite est masquée jusqu'à l'envoi */
+type Rewind = { message: MessageRow; later: number; annotations: number | null };
+
+/** Messages de la discussion remplacés par un retour à `from` (les résumés du cours restent) */
+const replacedBy = (from: MessageRow) => (m: MessageRow) => m.kind === "chat" && m.created_at >= from.created_at;
 
 /** En-tête d'un message de l'IA : distingue clairement qui parle, et le type de réponse. */
 function AssistantHeader({ kind, partTitle }: { kind: "summary" | "chat"; partTitle?: string }) {
@@ -35,6 +41,76 @@ function AssistantHeader({ kind, partTitle }: { kind: "summary" | "chat"; partTi
   );
 }
 
+const actionButton =
+  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full opacity-35 transition hover:bg-black/5 hover:!opacity-100 focus-visible:opacity-100 group-hover:opacity-70 disabled:cursor-wait dark:hover:bg-white/10";
+
+/** À gauche d'une question : revenir à ce message (le modifier), ou le retirer avec sa réponse. */
+function QuestionActions({
+  message,
+  onRewind,
+  onDelete,
+}: {
+  message: MessageRow;
+  onRewind: (message: MessageRow) => void;
+  onDelete: (message: MessageRow) => Promise<boolean>;
+}) {
+  const [confirm, setConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  if (confirm) {
+    return (
+      <div className="mt-1 flex shrink-0 items-center gap-1 text-sm" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setConfirm(false)}>
+        <span className="opacity-70">Retirer la question et sa réponse ?</span>
+        <button
+          type="button"
+          autoFocus
+          disabled={deleting}
+          onClick={async () => {
+            setDeleting(true);
+            if (!(await onDelete(message))) {
+              setDeleting(false);
+              setConfirm(false);
+            }
+          }}
+          className="rounded-lg bg-red-600 px-2.5 py-1 font-medium text-white hover:bg-red-500 disabled:opacity-60"
+        >
+          {deleting ? "…" : "Retirer"}
+        </button>
+        <button type="button" onClick={() => setConfirm(false)} className="rounded-lg px-2 py-1 opacity-70 hover:opacity-100">
+          Garder
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-1 flex shrink-0">
+      <button
+        type="button"
+        onClick={() => setConfirm(true)}
+        aria-label="Retirer ce message"
+        title="Retirer cette question et sa réponse"
+        className={actionButton}
+      >
+        <svg aria-hidden viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6} className="h-4 w-4">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h12M8 6V4.5h4V6M6 6l.7 9.5h6.6L14 6M8.5 9v4M11.5 9v4" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        onClick={() => onRewind(message)}
+        aria-label="Revenir à ce message"
+        title="Revenir à ce message : le modifier et reprendre la discussion à partir d'ici"
+        className={actionButton}
+      >
+        <svg aria-hidden viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 5.5 4 9l3.5 3.5" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 9h7.5a4.5 4.5 0 0 1 0 9H9" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 /**
  * Un message de la conversation. Mémorisé : il n'est réaffiché que si son contenu change,
  * pas à chaque touche tapée ni à chaque morceau de texte reçu pour un autre message.
@@ -42,13 +118,21 @@ function AssistantHeader({ kind, partTitle }: { kind: "summary" | "chat"; partTi
 export const MessageItem = memo(function MessageItem({
   message,
   partTitle,
+  onRewind,
+  onDelete,
 }: {
   message: MessageRow;
   partTitle?: string;
+  /** Flèche « revenir à ce message » sur les questions (absente sur une conversation partagée) */
+  onRewind?: (message: MessageRow) => void;
+  /** Corbeille : retire la question et sa réponse */
+  onDelete?: (message: MessageRow) => Promise<boolean>;
 }) {
   if (message.role === "user") {
+    const saved = !message.id.startsWith("pending-");
     return (
-      <div className="flex justify-end pt-2">
+      <div className="group flex items-start justify-end gap-1.5 pt-2">
+        {onRewind && onDelete && saved && <QuestionActions message={message} onRewind={onRewind} onDelete={onDelete} />}
         <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-indigo-600 px-4 py-2.5 leading-relaxed text-white">
           {message.content}
         </p>
@@ -87,6 +171,9 @@ function ChatInput({
   uploads,
   documents,
   onDismissUpload,
+  initialValue = "",
+  rewind,
+  onCancelRewind,
 }: {
   disabled: boolean;
   busy: boolean;
@@ -99,8 +186,12 @@ function ChatInput({
   uploads: Upload[];
   documents: DocumentRow[];
   onDismissUpload: (id: string) => void;
+  /** Texte de départ (question reprise par un retour en arrière) */
+  initialValue?: string;
+  rewind: Rewind | null;
+  onCancelRewind: () => void;
 }) {
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(initialValue);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -120,12 +211,40 @@ function ChatInput({
     // Fondu sous la barre : le texte qui défile ne se voit plus à travers
     <div className="sticky bottom-0 z-10 -mx-4 bg-gradient-to-t from-[var(--background)] from-55% to-transparent px-4 pb-4 pt-10">
       <UploadChips uploads={uploads} documents={documents} onDismiss={onDismissUpload} />
+      {rewind && (
+        <div
+          role="status"
+          className="mx-auto mb-2 flex max-w-[40rem] items-start gap-3 rounded-xl border border-indigo-500/30 bg-[var(--background)] px-3 py-2 text-sm shadow-sm"
+        >
+          <span aria-hidden className="mt-0.5 text-indigo-600 dark:text-indigo-400">↶</span>
+          <p className="min-w-0 flex-1">
+            <span className="font-medium">Retour à ta question.</span>{" "}
+            <span className="opacity-70">
+              Modifie-la puis envoie :{" "}
+              {rewind.later > 2 ? `les ${rewind.later - 1} messages suivants seront remplacés` : rewind.later === 2 ? "sa réponse sera remplacée" : "elle sera remplacée"}
+              {rewind.annotations
+                ? `, avec ${rewind.annotations > 1 ? `leurs ${rewind.annotations} annotations` : "leur annotation"}`
+                : ""}
+              . Les résumés du cours ne bougent pas.
+            </span>
+          </p>
+          <button
+            type="button"
+            onClick={onCancelRewind}
+            className="shrink-0 rounded-lg px-2 py-0.5 font-medium text-indigo-700 hover:bg-indigo-500/10 dark:text-indigo-300"
+          >
+            Annuler
+          </button>
+        </div>
+      )}
       <form
         onSubmit={submit}
         className="mx-auto flex max-w-[40rem] items-end gap-2 rounded-[1.6rem] border border-black/10 bg-[var(--background)] p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition focus-within:border-indigo-500/50 dark:border-white/10 dark:bg-[#151515] dark:shadow-[0_8px_30px_rgba(0,0,0,0.6)]"
       >
         <AddDocumentsButton onFiles={onFiles} onLink={onLink} />
         <textarea
+          autoFocus={!!initialValue}
+          onFocus={(e) => e.currentTarget.setSelectionRange(e.currentTarget.value.length, e.currentTarget.value.length)}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
@@ -185,6 +304,9 @@ export function Workspace({
   const [streaming, setStreaming] = useState<Streaming>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rewind, setRewind] = useState<Rewind | null>(null);
+  // Change à chaque retour en arrière ou annulation : la barre repart avec le bon texte
+  const [draft, setDraft] = useState({ key: 0, text: "" });
   const bottomRef = useRef<HTMLDivElement>(null);
   const { uploads, upload, addFromLink, dismiss } = useDocumentUpload({ courseId: course.id, userId, onChange: setDocuments });
 
@@ -194,6 +316,40 @@ export function Workspace({
   const summarizedParts = new Set(messages.filter((m) => m.kind === "summary").map((m) => m.part_id));
   const pendingParts = parts.filter((p) => !summarizedParts.has(p.id));
   const busy = !!streaming || analyzing;
+  // Pendant un retour en arrière, la suite de la discussion est masquée (supprimée seulement à l'envoi)
+  const shown = useMemo(() => (rewind ? messages.filter((m) => !replacedBy(rewind.message)(m)) : messages), [messages, rewind]);
+  const shownIds = useMemo(() => new Set(shown.map((m) => m.id)), [shown]);
+
+  const startRewind = useCallback(
+    async (message: MessageRow) => {
+      const later = messages.filter(replacedBy(message));
+      setError(null);
+      setRewind({ message, later: later.length, annotations: null });
+      setDraft((d) => ({ key: d.key + 1, text: message.content }));
+      // Annotations qui disparaîtront à l'envoi : prévenir avant
+      const { count } = await supabase
+        .from("annotations")
+        .select("id", { count: "exact", head: true })
+        .in("message_id", later.map((m) => m.id));
+      setRewind((r) => (r?.message.id === message.id ? { ...r, annotations: count ?? 0 } : r));
+    },
+    [messages, supabase],
+  );
+  const removeExchange = useCallback(async (message: MessageRow) => {
+    setError(null);
+    const result = await deleteExchange(message.id).catch(() => ({ error: "Connexion perdue. Réessaie.", deleted: undefined }));
+    if (!result.deleted) {
+      setError(result.error ?? "Impossible de retirer ce message.");
+      return false;
+    }
+    const gone = new Set(result.deleted);
+    setMessages((m) => m.filter((x) => !gone.has(x.id)));
+    return true;
+  }, []);
+  const cancelRewind = () => {
+    setRewind(null);
+    setDraft((d) => ({ key: d.key + 1, text: "" }));
+  };
 
   // Cours déjà analysé : un document ajouté, supprimé ou changé de type met les parties à jour tout seul
   // (nouvelles parties à la suite, parties déjà résumées intactes). Appels mis en file : jamais deux à la fois.
@@ -260,6 +416,13 @@ export function Workspace({
   async function ask(content: string): Promise<boolean> {
     let ok = true;
     setError(null);
+    // Retour en arrière : la suite disparaît tout de suite (rendue si le serveur refuse)
+    const from = rewind;
+    const replaced = from ? messages.filter(replacedBy(from.message)) : [];
+    if (from) {
+      setRewind(null);
+      setMessages((m) => m.filter((x) => !replaced.includes(x)));
+    }
     // Affichage immédiat de la question, remplacée par la version enregistrée à la réception
     const pendingId = `pending-${Date.now()}`;
     setMessages((m) => [
@@ -278,7 +441,7 @@ export function Workspace({
     const response = await fetch(`/api/courses/${course.id}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, rewindFrom: from?.message.id }),
     });
     await readStream(response, (event) => {
       if (event.type === "delta") setStreaming((s) => s && { ...s, content: s.content + event.text });
@@ -292,7 +455,11 @@ export function Workspace({
       if (event.type === "error") {
         setError(event.error);
         // La question n'a pas été enregistrée si le serveur a refusé : on la rend à l'utilisateur
-        setMessages((m) => m.filter((x) => x.id !== pendingId));
+        setMessages((m) => {
+          const kept = m.filter((x) => x.id !== pendingId);
+          return replaced.length ? [...kept, ...replaced].sort((a, b) => a.created_at.localeCompare(b.created_at)) : kept;
+        });
+        if (from) setRewind(from);
         ok = false;
       }
     });
@@ -307,10 +474,10 @@ export function Workspace({
       <CourseHeader
         title={course.title}
         subject={course.subject?.name ?? null}
-        outline={<OutlineButton messages={messages} parts={parts} documents={documents} onDocumentsChange={setDocuments} onDocumentsSettled={refreshParts} />}
+        outline={<OutlineButton messages={shown} parts={parts} documents={documents} onDocumentsChange={setDocuments} onDocumentsSettled={refreshParts} />}
       />
       <DropOverlay onFiles={upload} />
-      <CourseColumns aside={<CourseOutline messages={messages} parts={parts} documents={documents} onDocumentsChange={setDocuments} onDocumentsSettled={refreshParts} />}>
+      <CourseColumns aside={<CourseOutline messages={shown} parts={parts} documents={documents} onDocumentsChange={setDocuments} onDocumentsSettled={refreshParts} />}>
 
         <div className="flex-1 space-y-10 py-8">
           {documents.length === 0 && (
@@ -347,10 +514,16 @@ export function Workspace({
             </p>
           )}
 
-          <AnnotationLayer initialAnnotations={initialAnnotations} version={messages.length} prefs={lolPrefs}>
+          <AnnotationLayer initialAnnotations={initialAnnotations} version={shown.length} messageIds={shownIds} prefs={lolPrefs}>
             <div className="space-y-10">
-              {messages.map((message) => (
-                <MessageItem key={message.id} message={message} partTitle={partTitle(message.part_id)} />
+              {shown.map((message) => (
+                <MessageItem
+                  key={message.id}
+                  message={message}
+                  partTitle={partTitle(message.part_id)}
+                  onRewind={busy || message.kind !== "chat" || message.role !== "user" ? undefined : startRewind}
+                  onDelete={busy || message.kind !== "chat" || message.role !== "user" ? undefined : removeExchange}
+                />
               ))}
             </div>
           </AnnotationLayer>
@@ -406,6 +579,10 @@ export function Workspace({
         </div>
 
         <ChatInput
+          key={draft.key}
+          initialValue={draft.text}
+          rewind={rewind}
+          onCancelRewind={cancelRewind}
           disabled={ready.length === 0}
           busy={busy}
           onSend={ask}

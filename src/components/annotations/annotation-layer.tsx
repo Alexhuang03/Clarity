@@ -177,18 +177,25 @@ const COMPOSER_TEXT: Record<Composer["kind"], { placeholder: string; hint: strin
 export function AnnotationLayer({
   initialAnnotations,
   version,
+  messageIds,
   prefs,
   children,
 }: {
   initialAnnotations: AnnotationRow[];
   /** Change quand des messages apparaissent : les marques sont alors redessinées */
   version: number;
+  /** Messages affichés : les annotations des messages masqués (retour en arrière) ou supprimés sont ignorées */
+  messageIds: ReadonlySet<string>;
   /** Pings, roue d'émotes et son choisis dans « Mon compte » */
   prefs: LolPrefs;
   children: React.ReactNode;
 }) {
   const container = useRef<HTMLDivElement>(null);
-  const [annotations, setAnnotations] = useState(initialAnnotations);
+  const [allAnnotations, setAnnotations] = useState(initialAnnotations);
+  const annotations = useMemo(
+    () => allAnnotations.filter((a) => messageIds.has(a.message_id)),
+    [allAnnotations, messageIds],
+  );
   const [wheel, setWheel] = useState<WheelState | null>(null);
   const [hit, setHit] = useState<WheelHit | null>(null);
   const [composer, setComposer] = useState<Composer | null>(null);

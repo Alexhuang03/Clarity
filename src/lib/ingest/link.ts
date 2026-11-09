@@ -239,13 +239,69 @@ function pageToMarkdown(html: string, url: URL) {
     filter: "img",
     replacement: (_content, node) => {
       const alt = (node as Element).getAttribute("alt") ?? "";
-      // Image de formule : son texte alternatif est du LaTeX ; les autres images ne servent pas à l'IA
-      return /\\[a-z]+|\{\\displaystyle/.test(alt) ? `$${alt.replace(/^\{\\displaystyle\s*|\}$/g, "")}$` : "";
+      // Image de formule : son texte alternatif est du LaTeX
+      if (/\\[a-z]+|\{\\displaystyle/.test(alt)) return `$${alt.replace(/^\{\\displaystyle\s*|\}$/g, "")}$`;
+      // Autres images : gardées avec leur adresse complète, l'IA décrira les schémas pendant la lecture
+      const el = node as Element;
+      const href = absoluteImage(el.getAttribute("src") || el.getAttribute("data-src") || "", url);
+      return href ? `![${alt.replace(/[[\]\n]/g, " ").trim()}](${href})` : "";
     },
   });
   const title = (article?.title || pageTitle || url.hostname).trim();
   const markdown = `# ${title}\n\nSource : ${url.href}\n\n${turndown.turndown(article?.content ?? "")}`;
   return { title, markdown };
+}
+
+/** Adresse complète d'une image (relative à la page), ou null si elle n'est pas téléchargeable. */
+function absoluteImage(src: string, base: URL): string | null {
+  if (!src || src.startsWith("data:")) return null;
+  try {
+    const href = new URL(src, base);
+    if (href.protocol !== "http:" && href.protocol !== "https:") return null;
+    // Parenthèses et espaces casseraient la syntaxe Markdown ![...](...)
+    return href.href.replace(/[()\s]/g, (c) => encodeURIComponent(c));
+  } catch {
+    return null;
+  }
+}
+
+/** Markdown en ligne (GitHub...) : les images relatives (./image/schema.png) reçoivent leur adresse complète. */
+function absolutizeMarkdownImages(markdown: string, base: URL) {
+  return markdown
+    .replace(/!\[([^\]]*)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g, (all, alt: string, src: string) => {
+      const href = absoluteImage(src, base);
+      return href ? `![${alt}](${href})` : all;
+    })
+    .replace(/<img\b[^>]*>/gi, (tag) => {
+      const href = absoluteImage(tag.match(/\ssrc=["']([^"']+)["']/i)?.[1] ?? "", base);
+      const alt = tag.match(/\salt=["']([^"']*)["']/i)?.[1] ?? "";
+      return href ? `![${alt}](${href})` : tag;
+    });
+}
+
+const FIGURE_MAX_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Image d'un cours en ligne (schéma), téléchargée avec les mêmes protections que les liens.
+ * Renvoie null si ce n'est pas une image lisible : le cours est alors lu sans elle.
+ */
+export async function fetchFigure(href: string): Promise<{ data: Uint8Array; mimeType: string } | null> {
+  try {
+    const url = new URL(href);
+    checkUrl(url);
+    const { body } = await download(directUrl(url));
+    if (!body.length || body.length > FIGURE_MAX_BYTES) return null;
+    if (startsWith(body, "\x89PNG")) return { data: body, mimeType: "image/png" };
+    if (body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff) return { data: body, mimeType: "image/jpeg" };
+    if (startsWith(body, "RIFF") && body.subarray(8, 12).toString("latin1") === "WEBP") return { data: body, mimeType: "image/webp" };
+    // GIF et SVG : convertis en PNG (Gemini ne lit pas le SVG)
+    if (startsWith(body, "GIF8") || /<svg[\s>]/i.test(body.subarray(0, 1024).toString("latin1"))) {
+      return { data: await sharp(body, { failOn: "none" }).png().toBuffer(), mimeType: "image/png" };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /** Page « fichier trop volumineux pour l'analyse antivirus » de Google Drive : le vrai lien est dans le formulaire. */
@@ -308,7 +364,10 @@ export async function fetchLink(raw: string): Promise<FetchedLink> {
   }
   if (contentType.startsWith("text/") || /\.(md|markdown|txt)$/i.test(res.url.pathname)) {
     const markdown = /\.(md|markdown)$/i.test(res.url.pathname) || contentType.includes("markdown");
-    return file(markdown ? "md" : "txt", markdown ? "text/markdown" : "text/plain", Buffer.from(decodeText(body, contentType), "utf-8"));
+    const text = decodeText(body, contentType);
+    return markdown
+      ? file("md", "text/markdown", Buffer.from(absolutizeMarkdownImages(text, res.url), "utf-8"))
+      : file("txt", "text/plain", Buffer.from(text, "utf-8"));
   }
   throw new UserFacingError(`Type de contenu non pris en charge (${contentType.split(";")[0] || "inconnu"}). Liens acceptés : PDF, Word, PowerPoint, images, texte, pages web.`);
 }

@@ -91,11 +91,20 @@ export async function readFileWithGemini(
   data: Uint8Array,
   mimeType: string,
   prompt: string,
-  { timeoutMs = 90_000 }: { timeoutMs?: number } = {},
+  options: { timeoutMs?: number } = {},
 ): Promise<string> {
-  const base64 = Buffer.from(data).toString("base64");
+  return readFilesWithGemini([{ data, mimeType }], prompt, options);
+}
+
+/** Plusieurs fichiers dans une seule requête (ex. les schémas d'un cours : moins de requêtes, quota préservé). */
+export async function readFilesWithGemini(
+  files: { data: Uint8Array; mimeType: string }[],
+  prompt: string,
+  { timeoutMs = 90_000, use = "vision" }: { timeoutMs?: number; use?: "vision" | "figures" } = {},
+): Promise<string> {
+  const inline = files.map((f) => ({ inlineData: { mimeType: f.mimeType, data: Buffer.from(f.data).toString("base64") } }));
   const body = (thinking: boolean) => ({
-    contents: [{ role: "user", parts: [{ inlineData: { mimeType, data: base64 } }, { text: prompt }] }],
+    contents: [{ role: "user", parts: [...inline, { text: prompt }] }],
     generationConfig: {
       temperature: 0,
       maxOutputTokens: 65536,
@@ -109,7 +118,7 @@ export async function readFileWithGemini(
   let lastError: unknown;
   for (let round = 0; round < 2; round++) {
     if (round > 0) await sleep(10_000);
-    for (const model of modelChain("vision")) {
+    for (const model of modelChain(use)) {
       const id = model.split(":")[1];
       const started = Date.now();
       try {
