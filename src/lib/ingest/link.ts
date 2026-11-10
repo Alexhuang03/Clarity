@@ -31,9 +31,14 @@ export type FetchedLink = { data: Buffer; ext: string; mimeType: string; filenam
 const blocked = new net.BlockList();
 for (const [address, prefix] of [
   ["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8], ["169.254.0.0", 16], ["172.16.0.0", 12],
-  ["192.0.0.0", 24], ["192.168.0.0", 16], ["198.18.0.0", 15], ["224.0.0.0", 3],
+  ["192.0.0.0", 24], ["192.0.2.0", 24], ["192.88.99.0", 24], ["192.168.0.0", 16], ["198.18.0.0", 15],
+  ["198.51.100.0", 24], ["203.0.113.0", 24], ["224.0.0.0", 3],
 ] as const) blocked.addSubnet(address, prefix, "ipv4");
-for (const [address, prefix] of [["::", 128], ["::1", 128], ["fc00::", 7], ["fe80::", 10], ["ff00::", 8]] as const) {
+// IPv6 : locales, réservées, et préfixes qui encapsulent une adresse IPv4 (NAT64, 6to4, Teredo, IPv4 compatible)
+for (const [address, prefix] of [
+  ["::", 96], ["::1", 128], ["::ffff:0:0", 96], ["64:ff9b::", 96], ["64:ff9b:1::", 48], ["100::", 64],
+  ["2001::", 32], ["2001:db8::", 32], ["2002::", 16], ["fc00::", 7], ["fe80::", 10], ["fec0::", 10], ["ff00::", 8],
+] as const) {
   blocked.addSubnet(address, prefix, "ipv6");
 }
 
@@ -98,7 +103,21 @@ function directUrl(url: URL): URL {
 type Response = { status: number; headers: http.IncomingHttpHeaders; body: Buffer };
 
 function request(url: URL, deadline: number): Promise<Response> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolveRaw, rejectRaw) => {
+    // Délai total ferme : « timeout » ne mesure que l'inactivité, un site qui envoie un octet
+    // toutes les quelques secondes pourrait sinon occuper le serveur indéfiniment
+    const hard = setTimeout(
+      () => req.destroy(Object.assign(new Error("Délai dépassé"), { code: "TIMEOUT" })),
+      Math.max(1, deadline - Date.now()),
+    );
+    const resolve = (value: Response) => {
+      clearTimeout(hard);
+      resolveRaw(value);
+    };
+    const reject = (error: unknown) => {
+      clearTimeout(hard);
+      rejectRaw(error);
+    };
     const lib = url.protocol === "https:" ? https : http;
     const req = lib.request(
       url,
@@ -296,7 +315,7 @@ export async function fetchFigure(href: string): Promise<{ data: Uint8Array; mim
     if (startsWith(body, "RIFF") && body.subarray(8, 12).toString("latin1") === "WEBP") return { data: body, mimeType: "image/webp" };
     // GIF et SVG : convertis en PNG (Gemini ne lit pas le SVG)
     if (startsWith(body, "GIF8") || /<svg[\s>]/i.test(body.subarray(0, 1024).toString("latin1"))) {
-      return { data: await sharp(body, { failOn: "none" }).png().toBuffer(), mimeType: "image/png" };
+      return { data: await sharp(body, { failOn: "none", limitInputPixels: 64_000_000 }).png().toBuffer(), mimeType: "image/png" };
     }
     return null;
   } catch {
@@ -350,7 +369,7 @@ export async function fetchLink(raw: string): Promise<FetchedLink> {
   if (startsWith(body, "\x89PNG")) return file("png", "image/png");
   if (body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff) return file("jpg", "image/jpeg");
   if (startsWith(body, "RIFF") && body.subarray(8, 12).toString("latin1") === "WEBP") return file("webp", "image/webp");
-  if (startsWith(body, "GIF8")) return file("png", "image/png", await sharp(body).png().toBuffer());
+  if (startsWith(body, "GIF8")) return file("png", "image/png", await sharp(body, { limitInputPixels: 64_000_000 }).png().toBuffer());
   if (startsWith(body, "PK\x03\x04")) {
     const zip = await JSZip.loadAsync(body).catch(() => null);
     if (zip?.file("word/document.xml")) return file("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");

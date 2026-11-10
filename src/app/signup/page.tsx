@@ -133,7 +133,7 @@ export default function SignupPage() {
               setError(null);
               setInfo(null);
             }}
-            className="w-full text-sm opacity-70 hover:opacity-100"
+            className="w-full text-sm text-muted transition hover:text-foreground"
           >
             Modifier mon email
           </button>
@@ -205,7 +205,7 @@ export default function SignupPage() {
                 autoComplete="new-password"
               />
               {confirm.length > 0 && !passwordsMatch && (
-                <p className="text-xs text-red-600 dark:text-red-400">
+                <p className="text-xs text-danger">
                   Les mots de passe ne correspondent pas.
                 </p>
               )}

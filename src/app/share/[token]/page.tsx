@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { MessageRow, PartRow } from "@/lib/course/types";
 import { COURSE_FRAME, COURSE_MARGIN } from "@/components/course/layout";
 import { OutlineButton } from "@/components/course/outline-button";
+import { Logo } from "@/components/ui/logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { SharedConversation } from "./shared-conversation";
 
@@ -21,7 +22,7 @@ export default function SharePage({ params }: PageProps<"/share/[token]">) {
   return (
     <main className="flex flex-1 flex-col">
       <Suspense
-        fallback={<div className="mx-auto mt-16 h-8 w-64 animate-pulse rounded-lg bg-black/5 dark:bg-white/10" />}
+        fallback={<div className="mx-auto mt-16 h-8 w-64 animate-pulse rounded-lg bg-surface-2" />}
       >
         <SharedContent params={params} />
       </Suspense>
@@ -42,13 +43,10 @@ async function SharedContent({ params }: { params: Promise<{ token: string }> })
         <div aria-hidden className={`hidden xl:block ${COURSE_MARGIN}`} />
         <header className="flex items-start gap-3 py-6">
           <div className="min-w-0 flex-1">
-            {course.subject && (
-              <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
-                {course.subject.name}
-              </p>
-            )}
-            <h1 className="text-xl font-semibold">{course.title}</h1>
-            <p className="mt-1 text-sm opacity-60">
+            <Logo className="mb-6 text-sm" />
+            {course.subject && <p className="eyebrow">{course.subject.name}</p>}
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight">{course.title}</h1>
+            <p className="mt-1 text-sm text-muted">
               Cours partagé le{" "}
               {new Date(course.shared_at).toLocaleDateString("fr-FR", {
                 day: "numeric",
@@ -67,16 +65,17 @@ async function SharedContent({ params }: { params: Promise<{ token: string }> })
         parts={course.parts}
         messages={course.messages}
         footer={
-          <div className="mb-6 rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-6 text-center">
-            <p className="font-medium">Révise tes propres cours avec Clarity</p>
-            <p className="mt-1 text-sm opacity-70">
+          <div className="card relative isolate mb-6 overflow-hidden p-8 text-center">
+            <div
+              aria-hidden
+              className="absolute left-1/2 top-0 -z-10 h-40 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-soft blur-3xl"
+            />
+            <p className="font-display text-2xl italic">Révise tes propres cours avec Clarity</p>
+            <p className="mt-2 text-sm text-muted">
               Uploade tes cours et tes exos : l&apos;IA t&apos;en fait un résumé détaillé.
             </p>
-            <Link
-              href="/"
-              className="mt-4 inline-block rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-500"
-            >
-              Essayer Clarity
+            <Link href="/" className="btn btn-primary mt-5">
+              Essayer Clarity →
             </Link>
           </div>
         }

@@ -115,6 +115,18 @@ function MarkdownBlock({ text, ctx, headingBase }: { text: string; ctx: Context;
         </a>
       );
     },
+    // Défense en profondeur : pas d'image distante (fuite de données par l'URL, pistage). Seules les
+    // images de la même origine (chemin relatif) ou intégrées (data:image/...) sont affichées.
+    img({ src, alt }) {
+      const url = typeof src === "string" ? src.trim() : "";
+      // Relatif = sans schéma (http:, javascript:...) ni début « // », « \\ », « /\ » (URL vers un autre domaine)
+      const sameOrigin = url !== "" && !/^[a-z][a-z0-9+.-]*:/i.test(url) && !/^[\\/]{2}/.test(url);
+      if (!sameOrigin && !/^data:image\/(png|jpe?g|gif|webp|avif);/i.test(url)) {
+        return alt ? <span className="text-muted italic">[image : {alt}]</span> : null;
+      }
+      // eslint-disable-next-line @next/next/no-img-element -- contenu Markdown, dimensions inconnues
+      return <img src={url} alt={alt ?? ""} loading="lazy" />;
+    },
     h2: ({ node, children }) => <h2 id={headingId(node?.position?.start.line)}>{children}</h2>,
     h3: ({ node, children }) => <h3 id={headingId(node?.position?.start.line)}>{children}</h3>,
     table({ children }) {

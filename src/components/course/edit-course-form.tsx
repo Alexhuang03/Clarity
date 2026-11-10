@@ -4,8 +4,7 @@ import { useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateCourse } from "@/app/courses/actions";
 
-const inputClass =
-  "w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 outline-none focus:border-indigo-500 dark:border-white/20";
+const inputClass = "field";
 
 /** Formulaire de modification du titre et de la matière d'un cours. */
 export function EditCourseForm({
@@ -80,25 +79,25 @@ export function EditCourseForm({
       <div className="flex items-center gap-2">
         <button
           disabled={pending || !newTitle.trim()}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+          className="btn btn-primary"
         >
           {pending ? "Enregistrement…" : "Enregistrer"}
         </button>
-        <button type="button" onClick={onDone} className="rounded-lg px-4 py-2 text-sm opacity-70 hover:opacity-100">
+        <button type="button" onClick={onDone} className="btn btn-ghost">
           Annuler
         </button>
         {newSubject && (
           <button
             type="button"
             onClick={() => setNewSubject("")}
-            className="ml-auto text-sm opacity-60 hover:opacity-100"
+            className="ml-auto text-sm text-muted transition hover:text-foreground"
             title="Retirer la matière"
           >
             Retirer la matière
           </button>
         )}
       </div>
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
     </form>
   );
 }

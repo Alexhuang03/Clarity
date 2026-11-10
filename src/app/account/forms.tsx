@@ -68,7 +68,7 @@ export function ChangePasswordForm({ email }: { email: string }) {
           <>
             <PasswordInput id={id} value={confirm} onChange={setConfirm} autoComplete="new-password" />
             {confirm.length > 0 && password !== confirm && (
-              <p className="text-xs text-red-600 dark:text-red-400">
+              <p className="text-xs text-danger">
                 Les mots de passe ne correspondent pas.
               </p>
             )}
@@ -104,7 +104,7 @@ export function DeleteAccountForm() {
       </Field>
       <button
         disabled={confirmation !== "SUPPRIMER" || pending}
-        className="w-full rounded-lg bg-red-600 px-3 py-2 font-medium text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+        className="btn w-full bg-red-600 py-2.5 text-white hover:bg-red-500"
       >
         {pending ? "Suppression…" : "Supprimer définitivement mon compte"}
       </button>

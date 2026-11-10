@@ -13,7 +13,7 @@ export default function CoursePage({ params }: PageProps<"/courses/[id]">) {
     <PageSlide>
       <main className="flex flex-1 flex-col">
         <Suspense
-          fallback={<div className="mx-auto mt-16 h-8 w-64 animate-pulse rounded-lg bg-black/5 dark:bg-white/10" />}
+          fallback={<div className="mx-auto mt-16 h-8 w-64 animate-pulse rounded-lg bg-surface-2" />}
         >
           <CourseContent params={params} />
         </Suspense>

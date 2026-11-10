@@ -1,5 +1,9 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import BlurText from "@/components/reactbits/BlurText";
+import CountUp from "@/components/reactbits/CountUp";
+import { GridBackground } from "@/components/ui/grid-background";
+import { Logo } from "@/components/ui/logo";
 import { PageSlide } from "@/components/ui/page-slide";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { getCurrentUser } from "@/lib/auth";
@@ -11,30 +15,26 @@ import { NewCourseForm } from "./new-course-form";
 export default function Home() {
   return (
     <PageSlide>
-      <div className="mx-auto w-full max-w-5xl flex-1 px-4 sm:px-6">
-        <header className="flex items-center justify-between py-5">
-          <Link href="/" className="flex items-center gap-2.5 font-semibold tracking-tight">
-            <span
-              aria-hidden
-              className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-bold text-white"
-            >
-              C
-            </span>
-            Clarity
-          </Link>
-          <div className="flex items-center gap-1">
-            <ThemeToggle />
-            <Suspense fallback={<div className="h-8 w-8 rounded-full bg-black/5 dark:bg-white/10" />}>
-              <UserMenu />
-            </Suspense>
-          </div>
-        </header>
+      <div className="relative isolate flex flex-1 flex-col overflow-x-clip">
+        {/* Grille décorative en haut de page, fondue vers le bas */}
+        <GridBackground className="bottom-auto h-[30rem] [mask-image:linear-gradient(to_bottom,black_30%,transparent)]" />
+        <div className="mx-auto w-full max-w-5xl flex-1 px-4 sm:px-6">
+          <header className="flex items-center justify-between py-5">
+            <Logo />
+            <div className="flex items-center gap-1">
+              <ThemeToggle />
+              <Suspense fallback={<div className="h-8 w-8 rounded-full bg-surface-2" />}>
+                <UserMenu />
+              </Suspense>
+            </div>
+          </header>
 
-        <main className="pb-16 pt-10 sm:pt-16">
-          <Suspense fallback={<CoursesSkeleton />}>
-            <Courses />
-          </Suspense>
-        </main>
+          <main className="pb-16 pt-10 sm:pt-16">
+            <Suspense fallback={<CoursesSkeleton />}>
+              <Courses />
+            </Suspense>
+          </main>
+        </div>
       </div>
     </PageSlide>
   );
@@ -46,7 +46,7 @@ async function UserMenu() {
     <div className="flex items-center gap-1 text-sm">
       {/* Sur mobile, la déconnexion se fait depuis « Mon compte » */}
       <form action={signOut} className="hidden sm:block">
-        <button className="rounded-lg px-3 py-1.5 opacity-50 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10">
+        <button className="btn btn-ghost px-3 py-1.5 font-normal">
           Se déconnecter
         </button>
       </form>
@@ -54,7 +54,7 @@ async function UserMenu() {
         href="/account"
         title={`Mon compte (${user.email})`}
         aria-label="Mon compte"
-        className="flex h-8 w-8 items-center justify-center rounded-full bg-black/[0.06] text-xs font-semibold uppercase transition hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/15"
+        className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-surface text-xs font-semibold uppercase shadow-card transition hover:border-line-strong"
       >
         {user.email.charAt(0) || "?"}
       </Link>
@@ -75,22 +75,43 @@ async function Courses() {
 
   const subjectNames = (subjects ?? []).map((s) => s.name);
   const count = courses?.length ?? 0;
+  const documentTotal = (courses ?? []).reduce(
+    (sum, c) => sum + ((c.documents as unknown as { count: number }[])[0]?.count ?? 0),
+    0,
+  );
 
   return (
     <>
-      <div className="mb-8">
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Mes cours</h1>
-        <p className="mt-2 opacity-55">
-          {count === 0
-            ? "Crée ton premier cours et ajoute tes fichiers : l'IA en fera un résumé clair, pas à pas."
-            : `${count} cours${subjectNames.length ? ` · ${subjectNames.length} matière${subjectNames.length > 1 ? "s" : ""}` : ""}`}
-        </p>
+      <div className="mb-10 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="eyebrow mb-3">Tableau de bord</p>
+          <BlurText
+            as="h1"
+            text="Mes cours"
+            trigger="load"
+            delay={90}
+            distance={18}
+            className="text-4xl font-semibold tracking-tight sm:text-5xl"
+          />
+          <p className="mt-3 max-w-md text-muted">
+            {count === 0
+              ? "Crée ton premier cours et ajoute tes fichiers : l'IA en fera un résumé clair, pas à pas."
+              : "Reprends là où tu t'étais arrêté, ou ajoute un nouveau cours."}
+          </p>
+        </div>
+        {count > 0 && (
+          <dl className="flex gap-8 sm:gap-10">
+            <Stat value={count} label="cours" />
+            <Stat value={subjectNames.length} label={subjectNames.length > 1 ? "matières" : "matière"} />
+            <Stat value={documentTotal} label={documentTotal > 1 ? "documents" : "document"} />
+          </dl>
+        )}
       </div>
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {courses?.map((course) => {
+        {courses?.map((course, i) => {
           const subject = course.subject as unknown as { name: string; color: string } | null;
           return (
-            <li key={course.id}>
+            <li key={course.id} className="rise-in" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
               <CourseCard
                 id={course.id}
                 title={course.title}
@@ -109,13 +130,27 @@ async function Courses() {
   );
 }
 
+function Stat({ value, label }: { value: number; label: string }) {
+  return (
+    <div>
+      <dt className="sr-only">{label}</dt>
+      <dd className="text-3xl font-semibold tabular-nums tracking-tight">
+        <CountUp to={value} duration={1.2} trigger="load" />
+      </dd>
+      <dd aria-hidden className="mt-0.5 text-xs text-muted">
+        {label}
+      </dd>
+    </div>
+  );
+}
+
 function CoursesSkeleton() {
   return (
     <>
-      <div className="mb-8 h-10 w-48 animate-pulse rounded-lg bg-black/5 dark:bg-white/[0.06]" />
+      <div className="mb-10 h-24 w-64 animate-pulse rounded-xl bg-surface-2" />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-40 animate-pulse rounded-2xl bg-black/[0.03] dark:bg-white/[0.04]" />
+          <div key={i} className="h-40 animate-pulse rounded-[var(--radius-card)] bg-surface-2" />
         ))}
       </div>
     </>

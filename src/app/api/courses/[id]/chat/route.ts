@@ -6,15 +6,16 @@ import { searchCourse as searchInCourse } from "@/lib/course/retrieve";
 import { finalizeCitations, formatSources, numberSources } from "@/lib/course/sources";
 import { ndjsonResponse, streamAnswer } from "@/lib/course/stream";
 import { changesMeaning, quickUnderstanding, understandQuestion, type Intent } from "@/lib/course/understand";
-import { createClient } from "@/lib/supabase/server";
+import { LLM_INPUT_LIMITS, untrusted } from "@/lib/security/llm";
+import { enforceRateLimits, RATE_LIMITS, rateLimitResponse } from "@/lib/security/rate-limit";
+import { cleanText, isUuid, jsonError, readJsonBody, requireUser, type ServerSupabase } from "@/lib/security/request";
 
-const MAX_QUESTION = 4000;
+const MAX_QUESTION = LLM_INPUT_LIMITS.question;
 // Historique court : seulement les derniers échanges de la conversation. Les résumés n'y sont pas :
 // trop longs, ils noyaient la question (et les extraits utiles sont fournis à part).
 const HISTORY = 6;
 const HISTORY_MESSAGE_MAX = 1500;
 const MAX_SOURCES = 6;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const INTENT_LABEL: Record<Intent, string> = {
   cours: "question sur le cours",
@@ -26,16 +27,19 @@ const INTENT_LABEL: Record<Intent, string> = {
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: courseId } = await params;
-  const { content: rawQuestion, rewindFrom } = (await request.json()) as { content?: string; rewindFrom?: string };
-  const question = rawQuestion?.trim().slice(0, MAX_QUESTION);
-  if (!question) return Response.json({ error: "Question vide" }, { status: 400 });
-  if (rewindFrom !== undefined && (typeof rewindFrom !== "string" || !UUID.test(rewindFrom))) {
-    return Response.json({ error: "Message introuvable" }, { status: 400 });
-  }
+  if (!isUuid(courseId)) return jsonError("Cours introuvable", 404);
+  const body = await readJsonBody<{ content: unknown; rewindFrom: unknown }>(request);
+  if (body instanceof Response) return body;
+  const { rewindFrom } = body;
+  const question = cleanText(body.content, MAX_QUESTION);
+  if (!question) return jsonError("Question vide");
+  if (rewindFrom !== undefined && !isUuid(rewindFrom)) return jsonError("Message introuvable");
 
-  const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getClaims();
-  if (!auth?.claims) return Response.json({ error: "Non connecté" }, { status: 401 });
+  const auth = await requireUser();
+  if (auth instanceof Response) return auth;
+  const { supabase, user } = auth;
+  const limited = await enforceRateLimits(user.id, RATE_LIMITS.chat);
+  if (!limited.ok) return rateLimitResponse(limited);
 
   const readHistory = () =>
     supabase
@@ -68,7 +72,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .insert({ course_id: courseId, role: "user", kind: "chat", content: question })
     .select()
     .single();
-  if (userError) return Response.json({ error: "Impossible d'enregistrer la question" }, { status: 500 });
+  if (userError) return jsonError("Impossible d'enregistrer la question", 500);
 
   return ndjsonResponse(async (send) => {
     send({ type: "done", message: userMessage });
@@ -109,8 +113,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         {
           role: "user",
           content: [
-            `QUESTION ACTUELLE : ${question}`,
-            reformulated ? `(Autrement dit : ${understood.question})` : "",
+            `QUESTION ACTUELLE :
+${untrusted("QUESTION", question)}`,
+            reformulated ? `(Autrement dit : ${untrusted("REFORMULATION", understood.question, MAX_QUESTION)})` : "",
             `SOURCES :\n\n${formatSources(sources, chunks) || "(aucun extrait pertinent dans le cours)"}`,
             `Rappel : réponds uniquement à la question actuelle ci-dessus.`,
           ]
@@ -166,7 +171,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
  * (avec leurs annotations), la nouvelle version prend leur place. Les résumés du cours ne sont jamais touchés.
  * Renvoie un message d'erreur, ou null si tout s'est bien passé.
  */
-async function rewind(supabase: Awaited<ReturnType<typeof createClient>>, courseId: string, messageId: string) {
+async function rewind(supabase: ServerSupabase, courseId: string, messageId: string) {
   const { data: from } = await supabase
     .from("messages")
     .select("created_at")

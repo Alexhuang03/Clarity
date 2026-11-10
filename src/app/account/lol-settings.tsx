@@ -28,7 +28,7 @@ const IMAGE_MAX = 2 * 1024 * 1024;
 const SOUND_MAX = 1024 * 1024;
 const CUSTOM_MAX = 30;
 
-const card = "rounded-2xl border border-black/10 p-6 dark:border-white/15";
+const card = "card p-6";
 const smallButton =
   "rounded-lg border border-black/15 px-3 py-1.5 text-sm hover:bg-black/5 disabled:opacity-40 dark:border-white/20 dark:hover:bg-white/10";
 
@@ -448,7 +448,7 @@ function CustomEmotesSection({
           {customs.map((c) => {
             const view = emoteView(customEmoteRef(c.id), customs)!;
             return (
-              <li key={c.id} className="flex items-center gap-2 rounded-xl border border-black/10 p-2 dark:border-white/15">
+              <li key={c.id} className="flex items-center gap-2 rounded-xl border border-line p-2">
                 {/* eslint-disable-next-line @next/next/no-img-element -- émote importée */}
                 <img src={view.still} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
                 <span className="min-w-0 flex-1 truncate text-sm" title={c.name}>
@@ -474,7 +474,7 @@ function CustomEmotesSection({
         </ul>
       )}
 
-      <form onSubmit={upload} className="mt-4 space-y-3 rounded-xl bg-black/[0.03] p-4 dark:bg-white/5">
+      <form onSubmit={upload} className="mt-4 space-y-3 rounded-xl bg-surface-2 p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black/10 text-xl dark:bg-white/10">
             {/* eslint-disable-next-line @next/next/no-img-element -- aperçu local avant import */}
@@ -487,7 +487,7 @@ function CustomEmotesSection({
               onChange={(e) => setName(e.target.value)}
               maxLength={40}
               placeholder="Ex. : Je n'y comprends rien"
-              className="w-full rounded-lg border border-black/15 bg-transparent px-3 py-1.5 outline-none focus:border-indigo-500 dark:border-white/20"
+              className="field py-1.5"
             />
           </label>
         </div>

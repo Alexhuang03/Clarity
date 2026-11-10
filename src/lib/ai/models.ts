@@ -16,7 +16,10 @@ const FLASH: ModelId[] = ["gemini:gemini-3.6-flash", "gemini:gemini-3.5-flash", 
 const FLASH_LITE: ModelId[] = ["gemini:gemini-3.1-flash-lite", "gemini:gemini-3.5-flash-lite", "gemini:gemini-flash-lite-latest"];
 
 // Chaînes de secours : si un modèle échoue (quota, surcharge, délai), on passe au suivant.
-const CHAINS: Record<"summary" | "chat" | "light" | "analysis" | "vision" | "figures", ModelId[]> = {
+const CHAINS: Record<"summary" | "chat" | "light" | "analysis" | "vision" | "figures" | "study", ModelId[]> = {
+  // Outils d'étude (quiz, flashcards, fiches, cartes mentales…) : Flash-Lite d'abord (quota large),
+  // pour préserver les ~20 requêtes/jour de Flash réservées aux résumés ; gpt-oss-120b en secours
+  study: [FLASH_LITE[0], FLASH_LITE[1], FLASH[0], "groq:openai/gpt-oss-120b", FLASH[1]],
   // Résumés : gros contexte et bonne qualité d'explication (Groq gratuit : 8 000 tokens/min, trop peu pour une partie)
   summary: [...FLASH, FLASH_LITE[0], "groq:openai/gpt-oss-120b"],
   // Questions : rapidité d'abord
@@ -31,6 +34,9 @@ const CHAINS: Record<"summary" | "chat" | "light" | "analysis" | "vision" | "fig
   // de Flash (20 requêtes par jour seulement), réservé aux résumés
   figures: [...FLASH_LITE, FLASH[1]],
 };
+
+/** Tous les modèles connus du code : un modèle « préféré » hors de cette liste est ignoré. */
+const ALLOWED_MODELS = new Set<string>(Object.values(CHAINS).flat());
 
 const KEYS: Record<string, string | undefined> = {
   gemini: process.env.GEMINI_API_KEY,
@@ -53,8 +59,13 @@ export function markAvailable(model: string) {
 const isHealthy = (model: string) => (unavailableUntil.get(model) ?? 0) <= Date.now();
 
 /** Chaîne de modèles pour un usage : clé renseignée, modèles en bonne santé d'abord (l'ordre est gardé sinon). */
-export function modelChain(use: keyof typeof CHAINS, preferred?: string | null): ModelId[] {
-  // Le modèle choisi par l'utilisateur passe en tête, les autres restent en secours
+export type ModelUse = keyof typeof CHAINS;
+
+export function modelChain(use: ModelUse, preferred?: string | null): ModelId[] {
+  // Le modèle choisi par l'utilisateur passe en tête, les autres restent en secours.
+  // Sécurité : le réglage vient de la base, modifiable par l'utilisateur via l'API Supabase. Seuls les modèles
+  // gratuits de nos listes sont acceptés (sinon : modèle payant sur nos clés, ou identifiant injecté dans l'URL).
+  if (preferred && !ALLOWED_MODELS.has(preferred)) preferred = null;
   const chain = preferred
     ? [preferred as ModelId, ...CHAINS[use].filter((m) => m !== preferred)]
     : CHAINS[use];

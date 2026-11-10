@@ -1,6 +1,8 @@
 // Sources citables : chaque extrait envoyé à l'IA reçoit un numéro [S1], [S2]...
 // Après la réponse, on ne garde que les numéros qui existent vraiment.
 
+import { neutralizeDelimiters, untrusted } from "@/lib/security/llm";
+
 export type SourceChunk = {
   id: string;
   document_id: string;
@@ -47,7 +49,8 @@ export function formatSources(sources: Source[], chunks: SourceChunk[]): string 
       const where = [s.kind === "exo" ? "EXERCICE" : "COURS", s.filename, s.page ? `page ${s.page}` : null, s.section]
         .filter(Boolean)
         .join(" · ");
-      return `[S${s.n}] (${where})\n${chunks[i].content}`;
+      // Délimité et neutralisé : le contenu d'un document ne peut pas « sortir » de son extrait (injection de consignes)
+      return `[S${s.n}] (${neutralizeDelimiters(where.replace(/\s+/g, " "))})\n${untrusted(`EXTRAIT S${s.n}`, chunks[i].content)}`;
     })
     .join("\n\n---\n\n");
 }

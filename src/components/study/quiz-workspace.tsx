@@ -1,0 +1,257 @@
+"use client";
+
+import { useState } from "react";
+import type {
+  AttemptResponse,
+  AttemptResult,
+  AttemptSummary,
+  CreateQuizRequest,
+  CreateQuizResponse,
+  PublicQuiz,
+  QuizDetailResponse,
+  QuizMode,
+  QuizSummary,
+} from "@/lib/study/types";
+import { errorMessage, formatDate, studyApi } from "./api";
+import { QuizPlayer } from "./quiz-player";
+import { QuizResults } from "./quiz-results";
+import { DeleteButton, ErrorNote, Generating, ListSkeleton, SectionTitle, scoreTone } from "./ui";
+import { useStudyResource } from "./use-study";
+
+type View =
+  | { kind: "home" }
+  | { kind: "generating" }
+  | { kind: "loading" }
+  | { kind: "detail"; quiz: PublicQuiz; attempts: AttemptSummary[] }
+  | { kind: "play"; quiz: PublicQuiz; attempt: AttemptSummary }
+  | { kind: "result"; quiz: PublicQuiz; result: AttemptResult };
+
+const MODE_LABEL: Record<QuizMode, string> = { quiz: "Quiz", exam: "Examen blanc", quick: "Test rapide" };
+
+/**
+ * Cycle commun au quiz, à l'examen blanc et au test rapide : configuration (fournie par la page),
+ * génération, déroulé, correction, historique des tentatives.
+ */
+export function QuizWorkspace({
+  courseId,
+  mode,
+  renderConfig,
+  generatingHint,
+  historyTitle = "Historique",
+}: {
+  courseId: string;
+  mode: QuizMode;
+  /** Formulaire de configuration ; start lance la génération */
+  renderConfig: (start: (request: CreateQuizRequest) => void) => React.ReactNode;
+  generatingHint?: string;
+  historyTitle?: string;
+}) {
+  const [view, setView] = useState<View>({ kind: "home" });
+  const [error, setError] = useState<string | null>(null);
+  const history = useStudyResource<{ quizzes: QuizSummary[] }>(courseId, "/quizzes");
+  const quizzes = history.data?.quizzes.filter((q) => q.mode === mode) ?? [];
+
+  async function run(next: () => Promise<View>, pending: View = { kind: "loading" }) {
+    const previous = view;
+    setError(null);
+    setView(pending);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    try {
+      setView(await next());
+    } catch (e) {
+      setError(errorMessage(e));
+      setView(previous.kind === "generating" || previous.kind === "loading" ? { kind: "home" } : previous);
+    }
+  }
+
+  const start = (request: CreateQuizRequest) =>
+    run(async () => {
+      const { quiz, attempt } = await studyApi<CreateQuizResponse>(courseId, "/quizzes", { method: "POST", body: request });
+      history.reload();
+      return { kind: "play", quiz, attempt };
+    }, { kind: "generating" });
+
+  const openQuiz = (id: string) =>
+    run(async () => {
+      const { quiz, attempts } = await studyApi<QuizDetailResponse>(courseId, `/quizzes/${id}`);
+      return { kind: "detail", quiz, attempts };
+    });
+
+  const retry = (quiz: PublicQuiz) =>
+    run(async () => {
+      const { attempt } = await studyApi<{ attempt: AttemptSummary }>(courseId, `/quizzes/${quiz.id}/attempts`, {
+        method: "POST",
+      });
+      return { kind: "play", quiz, attempt };
+    });
+
+  const openAttempt = (quiz: PublicQuiz, attempt: AttemptSummary) =>
+    run(async () => {
+      if (!attempt.submittedAt) return { kind: "play", quiz, attempt };
+      const res = await studyApi<AttemptResponse>(courseId, `/quizzes/${quiz.id}/attempts/${attempt.id}`);
+      return res.status === "submitted" ? { kind: "result", quiz, result: res.attempt } : { kind: "play", quiz, attempt };
+    });
+
+  async function remove(id: string) {
+    try {
+      await studyApi(courseId, `/quizzes/${id}`, { method: "DELETE" });
+      history.setData((d) => (d ? { quizzes: d.quizzes.filter((q) => q.id !== id) } : d));
+      if (view.kind !== "home") setView({ kind: "home" });
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  }
+
+  const back = () => {
+    setView({ kind: "home" });
+    history.reload();
+  };
+
+  if (view.kind === "generating") {
+    return <Generating hint={generatingHint} />;
+  }
+  if (view.kind === "loading") {
+    return <ListSkeleton rows={4} />;
+  }
+  if (view.kind === "play") {
+    return (
+      <QuizPlayer
+        key={view.attempt.id}
+        courseId={courseId}
+        quiz={view.quiz}
+        attempt={view.attempt}
+        onGraded={(result) => {
+          setView({ kind: "result", quiz: view.quiz, result });
+          history.reload();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+        onQuit={back}
+      />
+    );
+  }
+  if (view.kind === "result") {
+    return (
+      <>
+        <ErrorNote message={error} />
+        <QuizResults
+          result={view.result}
+          title={view.quiz.title}
+          actions={
+            <>
+              <button type="button" onClick={() => retry(view.quiz)} className="btn btn-primary">
+                Refaire
+              </button>
+              <button type="button" onClick={() => openQuiz(view.quiz.id)} className="btn btn-secondary">
+                Historique des tentatives
+              </button>
+              <button type="button" onClick={back} className="btn btn-ghost">
+                Terminer
+              </button>
+            </>
+          }
+        />
+      </>
+    );
+  }
+  if (view.kind === "detail") {
+    const { quiz, attempts } = view;
+    return (
+      <div className="mx-auto max-w-2xl">
+        <button type="button" onClick={back} className="btn btn-ghost -ml-3 mb-4 px-3 py-1.5 font-normal">
+          ← Retour
+        </button>
+        <div className="card p-6">
+          <p className="eyebrow">{MODE_LABEL[quiz.mode]}</p>
+          <h2 className="mt-1 text-xl font-semibold tracking-tight">{quiz.title}</h2>
+          <p className="mt-1 text-sm text-muted">
+            {quiz.questions.length} questions
+            {quiz.timeLimitSec ? ` · ${Math.round(quiz.timeLimitSec / 60)} min` : ""} · créé le {formatDate(quiz.createdAt)}
+          </p>
+          {quiz.config.targetConcepts && quiz.config.targetConcepts.length > 0 && (
+            <p className="mt-2 text-sm text-muted">Notions ciblées : {quiz.config.targetConcepts.join(", ")}</p>
+          )}
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => retry(quiz)} className="btn btn-primary">
+              Nouvelle tentative
+            </button>
+            <span className="ml-auto">
+              <DeleteButton onDelete={() => remove(quiz.id)} label="Supprimer" />
+            </span>
+          </div>
+        </div>
+        <ErrorNote message={error} />
+        <div className="mt-8">
+          <SectionTitle>Tentatives</SectionTitle>
+        </div>
+        <ul className="space-y-2">
+          {attempts.map((a) => (
+            <li key={a.id}>
+              <button
+                type="button"
+                onClick={() => openAttempt(quiz, a)}
+                className="flex w-full items-center gap-4 rounded-xl border border-line bg-surface px-4 py-3 text-left transition hover:border-line-strong"
+              >
+                <span className="min-w-0 flex-1 text-sm">
+                  {formatDate(a.submittedAt ?? a.startedAt)}
+                  {a.late && <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">en retard</span>}
+                </span>
+                {a.submittedAt ? (
+                  <span className={`font-semibold tabular-nums ${scoreTone(a.percent)}`}>{Math.round(a.percent ?? 0)} %</span>
+                ) : (
+                  <span className="text-sm text-accent-text">Reprendre →</span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-10">
+      <ErrorNote message={error} />
+      {renderConfig(start)}
+      <section>
+        <SectionTitle>{historyTitle}</SectionTitle>
+        {history.loading && !history.data ? (
+          <ListSkeleton />
+        ) : history.error ? (
+          <ErrorNote message={history.error} onRetry={history.reload} />
+        ) : quizzes.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-line-strong px-4 py-6 text-center text-sm text-muted">
+            Rien pour l&apos;instant : ton historique apparaîtra ici.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {quizzes.map((q, i) => (
+              <li key={q.id} className="rise-in" style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
+                <button
+                  type="button"
+                  onClick={() => openQuiz(q.id)}
+                  className="flex w-full items-center gap-4 rounded-xl border border-line bg-surface px-4 py-3 text-left transition hover:border-line-strong hover:shadow-card"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{q.title}</span>
+                    <span className="mt-0.5 block text-xs text-muted">
+                      {q.questionCount} questions · {formatDate(q.createdAt)} · {q.attemptCount} tentative
+                      {q.attemptCount > 1 ? "s" : ""}
+                    </span>
+                  </span>
+                  <span className="text-right">
+                    <span className={`block font-semibold tabular-nums ${scoreTone(q.lastPercent)}`}>
+                      {q.lastPercent === null ? "—" : `${Math.round(q.lastPercent)} %`}
+                    </span>
+                    {q.bestPercent !== null && q.attemptCount > 1 && (
+                      <span className="block text-xs text-muted">meilleur {Math.round(q.bestPercent)} %</span>
+                    )}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}

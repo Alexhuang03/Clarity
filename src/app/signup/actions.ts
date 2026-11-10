@@ -27,8 +27,10 @@ async function hasRecords(lookup: Promise<unknown[]>) {
  * En cas de panne DNS, on laisse passer pour ne pas bloquer l'inscription.
  */
 export async function checkEmailDomain(email: string): Promise<{ ok: boolean }> {
-  const domain = email.split("@")[1]?.trim().toLowerCase();
-  if (!domain || !domain.includes(".")) return { ok: false };
+  // Action publique (sans connexion) : on ne résout que des noms de domaine valides et courts
+  const domain = typeof email === "string" ? email.slice(0, 320).split("@")[1]?.trim().toLowerCase() : "";
+  if (!domain || !domain.includes(".") || domain.length > 253) return { ok: false };
+  if (!/^[\p{L}\p{N}-]+(\.[\p{L}\p{N}-]+)+$/u.test(domain)) return { ok: false };
   try {
     if (await hasRecords(resolveMx(domain))) return { ok: true };
     const hasAddress = (await hasRecords(resolve4(domain))) || (await hasRecords(resolve6(domain)));

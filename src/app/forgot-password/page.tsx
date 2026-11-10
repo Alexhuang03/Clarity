@@ -100,7 +100,7 @@ export default function ForgotPasswordPage() {
                   autoComplete="new-password"
                 />
                 {confirm.length > 0 && password !== confirm && (
-                  <p className="text-xs text-red-600 dark:text-red-400">
+                  <p className="text-xs text-danger">
                     Les mots de passe ne correspondent pas.
                   </p>
                 )}
@@ -133,7 +133,7 @@ export default function ForgotPasswordPage() {
               setError(null);
               setInfo(null);
             }}
-            className="w-full text-sm opacity-70 hover:opacity-100"
+            className="w-full text-sm text-muted transition hover:text-foreground"
           >
             Modifier mon email
           </button>

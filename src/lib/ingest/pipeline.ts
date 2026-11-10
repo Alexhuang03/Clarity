@@ -19,6 +19,12 @@ export async function processDocument(documentId: string) {
   if (error || !doc) return console.error("[ingest] document introuvable", documentId, error);
 
   try {
+    // Client admin = sans RLS : on ne lit jamais un fichier hors du dossier du propriétaire du document
+    // (sinon une ligne forgée via l'API pourrait faire lire au serveur le fichier d'un autre utilisateur)
+    const path = String(doc.storage_path ?? "");
+    if (!path.startsWith(`${doc.user_id}/${doc.course_id}/`) || path.includes("..")) {
+      throw new UserFacingError("Fichier refusé.");
+    }
     await setStatus({ status: "parsing", progress: 0, error: null });
 
     const { data: file, error: downloadError } = await admin.storage.from("documents").download(doc.storage_path);

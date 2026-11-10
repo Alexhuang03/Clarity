@@ -13,16 +13,19 @@ export const COURSE_HEADER_SLOT = "course-header-actions";
  * Modifier / Partager / Supprimer se trouvent sur la carte du cours, à l'accueil.
  */
 export function CourseHeader({
+  courseId,
   title,
   subject,
   outline,
 }: {
+  /** Pour le lien « Réviser » (absent : pas de lien) */
+  courseId?: string;
   title: string;
   subject: string | null;
   outline?: React.ReactNode;
 }) {
   return (
-    <header className="sticky top-0 z-30 border-b border-black/10 bg-[var(--background)]/85 backdrop-blur-md dark:border-white/10">
+    <header className="sticky top-0 z-30 border-b border-line bg-background/85 backdrop-blur-md">
       {/* Même grille que le cours : « Mes cours » au-dessus du sommaire, titre au-dessus du texte */}
       <div className={`${COURSE_FRAME} flex items-center gap-3 py-3`}>
         <Link
@@ -31,16 +34,16 @@ export function CourseHeader({
           className={`flex shrink-0 items-center ${COURSE_MARGIN}`}
           aria-label="Retour à mes cours"
         >
-          <span className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm opacity-70 hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10 xl:-ml-2">
+          <span className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-muted transition hover:bg-surface-2 hover:text-foreground xl:-ml-2">
             <span aria-hidden>←</span>
             <span className="hidden sm:inline">Mes cours</span>
           </span>
         </Link>
 
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className="min-w-0 flex-1 border-l border-black/10 pl-3 dark:border-white/10 xl:border-0 xl:pl-0">
+          <div className="min-w-0 flex-1 border-l border-line pl-3 xl:border-0 xl:pl-0">
             {subject && (
-              <p className="truncate text-[0.65rem] font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
+              <p className="eyebrow truncate !text-[0.65rem]">
                 {subject}
               </p>
             )}
@@ -51,6 +54,20 @@ export function CourseHeader({
           {/* Emplacement rempli par la couche d'annotations (bouton « 💬 N » sur mobile) */}
           <div id={COURSE_HEADER_SLOT} className="flex shrink-0 items-center empty:hidden" />
           {outline}
+          {courseId && (
+            <Link
+              href={`/courses/${courseId}/study`}
+              transitionTypes={["nav-forward"]}
+              aria-label="Réviser ce cours"
+              title="Réviser : quiz, flashcards, fiches, examens blancs…"
+              className="flex shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-sm font-medium shadow-card transition hover:border-accent/40 hover:text-accent-text"
+            >
+              <svg aria-hidden viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6} className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 6.5 10 3l7 3.5-7 3.5-7-3.5ZM6 8.2v4.3c0 1 1.8 2.5 4 2.5s4-1.5 4-2.5V8.2M17 6.5V11" />
+              </svg>
+              <span className="hidden sm:inline">Réviser</span>
+            </Link>
+          )}
           <ThemeToggle />
         </div>
       </div>

@@ -4,28 +4,35 @@ import { loadCourseContext } from "@/lib/course/context";
 import { summaryPrompt } from "@/lib/course/prompts";
 import { finalizeCitations, formatSources, numberSources, type SourceChunk } from "@/lib/course/sources";
 import { ndjsonResponse, streamAnswer } from "@/lib/course/stream";
-import { createClient } from "@/lib/supabase/server";
+import { neutralizeDelimiters } from "@/lib/security/llm";
+import { enforceRateLimits, RATE_LIMITS, rateLimitResponse } from "@/lib/security/rate-limit";
+import { isUuid, jsonError, readJsonBody, requireUser } from "@/lib/security/request";
 
 // Au-delà, on ne garde que les extraits d'exercices les plus proches de la partie
 const EXERCISES_FULL_MAX = 15_000;
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: courseId } = await params;
-  const { partId } = (await request.json()) as { partId?: string };
-  const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getClaims();
-  if (!auth?.claims) return Response.json({ error: "Non connecté" }, { status: 401 });
+  if (!isUuid(courseId)) return jsonError("Cours introuvable", 404);
+  const body = await readJsonBody<{ partId: unknown }>(request);
+  if (body instanceof Response) return body;
+  const { partId } = body;
+  if (!isUuid(partId)) return jsonError("Partie introuvable", 404);
+
+  const auth = await requireUser();
+  if (auth instanceof Response) return auth;
+  const { supabase, user } = auth;
 
   const ctx = await loadCourseContext(supabase, courseId);
-  if (!ctx) return Response.json({ error: "Cours introuvable" }, { status: 404 });
+  if (!ctx) return jsonError("Cours introuvable", 404);
 
   const { data: part } = await supabase
     .from("course_parts")
     .select("id, title, chunk_ids")
-    .eq("id", partId ?? "")
+    .eq("id", partId)
     .eq("course_id", courseId)
     .maybeSingle();
-  if (!part) return Response.json({ error: "Partie introuvable" }, { status: 404 });
+  if (!part) return jsonError("Partie introuvable", 404);
 
   // Un résumé existe déjà pour cette partie : on ne le régénère pas (il est figé)
   const { data: existing } = await supabase
@@ -34,7 +41,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .eq("part_id", part.id)
     .eq("kind", "summary")
     .limit(1);
-  if (existing?.length) return Response.json({ error: "Résumé déjà généré" }, { status: 409 });
+  if (existing?.length) return jsonError("Résumé déjà généré", 409);
+
+  // Compté seulement quand un résumé va vraiment être généré
+  const limited = await enforceRateLimits(user.id, RATE_LIMITS.summary);
+  if (!limited.ok) return rateLimitResponse(limited);
 
   const { data: partChunks } = await supabase
     .from("chunks")
@@ -43,7 +54,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const order = new Map<string, number>((part.chunk_ids as string[]).map((id, i) => [id, i]));
   const coursChunks: SourceChunk[] = (partChunks ?? []).sort((a, b) => order.get(a.id)! - order.get(b.id)!);
   if (coursChunks.length === 0) {
-    return Response.json({ error: "Le contenu de cette partie a été supprimé. Relance l'analyse." }, { status: 409 });
+    return jsonError("Le contenu de cette partie a été supprimé. Relance l'analyse.", 409);
   }
 
   // Exercices : tous s'ils sont courts, sinon les plus proches du sujet de la partie
@@ -81,7 +92,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         messages: [
           {
             role: "user",
-            content: `Cours : « ${ctx.course.title} » — partie : « ${part.title} »\n\nSOURCES :\n\n${formatSources(sources, chunks)}`,
+            content: `Cours : « ${neutralizeDelimiters(ctx.course.title.slice(0, 200))} » — partie : « ${neutralizeDelimiters(String(part.title).slice(0, 200))} »\n\nSOURCES :\n\n${formatSources(sources, chunks)}`,
           },
         ],
         maxTokens: 16384,

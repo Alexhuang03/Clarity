@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useState } from "react";
 import { EditCourseForm } from "@/components/course/edit-course-form";
+import { Spotlight } from "@/components/ui/spotlight";
 import { ShareButton, ShareIcon } from "@/components/course/share-dialog";
 import { DeleteCourseButton } from "./delete-course-button";
 
-const ICON_BASE = "rounded-lg p-2 opacity-60 transition hover:opacity-100";
-const ICON_BUTTON = `${ICON_BASE} hover:bg-black/5 dark:hover:bg-white/10`;
+const ICON_BASE = "rounded-lg p-2 text-muted transition hover:text-foreground";
+const ICON_BUTTON = `${ICON_BASE} hover:bg-surface-2`;
 
 export function CourseCard({
   id,
@@ -30,7 +31,7 @@ export function CourseCard({
 
   if (editing) {
     return (
-      <div className="h-full rounded-2xl border border-indigo-500/60 p-5">
+      <div className="card h-full !border-accent/50 p-5">
         <EditCourseForm
           courseId={id}
           title={title}
@@ -44,31 +45,41 @@ export function CourseCard({
 
   return (
     <div className="group relative h-full">
-      <Link
-        href={`/courses/${id}`}
-        transitionTypes={["nav-forward"]}
-        className="flex h-full min-h-40 flex-col rounded-2xl border border-black/[0.07] bg-black/[0.015] p-5 transition hover:-translate-y-0.5 hover:border-black/15 hover:bg-black/[0.03] hover:shadow-sm dark:border-white/[0.07] dark:bg-white/[0.025] dark:hover:border-white/15 dark:hover:bg-white/[0.04]"
-      >
-        <span className="flex h-5 items-center gap-2 pr-24 text-xs opacity-60">
-          {subject && (
-            <>
-              <span
-                aria-hidden
-                className="h-2 w-2 shrink-0 rounded-full"
-                style={{ backgroundColor: subjectColor ?? "#6366f1" }}
-              />
-              <span className="truncate">{subject}</span>
-            </>
-          )}
-        </span>
-        <p className="mt-3 line-clamp-2 text-[0.95rem] font-medium leading-snug">{title}</p>
-        <p className="mt-auto pt-6 text-xs opacity-45">
-          {documentCount} document{documentCount > 1 ? "s" : ""} ·{" "}
-          {new Date(createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
-        </p>
-      </Link>
+      <Spotlight className="h-full transition duration-300 ease-[var(--ease-out-soft)] group-hover:-translate-y-0.5 group-hover:shadow-pop">
+        <Link
+          href={`/courses/${id}`}
+          transitionTypes={["nav-forward"]}
+          className="flex h-full min-h-40 flex-col rounded-[inherit] p-5 focus-visible:outline-offset-[-2px]"
+        >
+          <span className="flex h-5 items-center gap-2 pr-24 text-xs text-muted">
+            {subject && (
+              <>
+                <span
+                  aria-hidden
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: subjectColor ?? "var(--accent)" }}
+                />
+                <span className="truncate">{subject}</span>
+              </>
+            )}
+          </span>
+          <p className="mt-3 line-clamp-2 text-[0.95rem] font-medium leading-snug">{title}</p>
+          <p className="mt-auto flex items-center justify-between pt-6 text-xs text-muted">
+            <span>
+              {documentCount} document{documentCount > 1 ? "s" : ""} ·{" "}
+              {new Date(createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+            </span>
+            <span
+              aria-hidden
+              className="translate-x-[-4px] opacity-0 transition duration-300 group-hover:translate-x-0 group-hover:opacity-100"
+            >
+              →
+            </span>
+          </p>
+        </Link>
+      </Spotlight>
       {/* Boutons hors du lien : visibles au survol sur ordinateur, toujours visibles sur écran tactile */}
-      <div className="absolute right-2.5 top-2.5 flex transition focus-within:opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+      <div className="absolute right-2.5 top-2.5 z-10 flex transition focus-within:opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
         <ShareButton courseId={id} title={title} className={ICON_BUTTON}>
           <ShareIcon />
         </ShareButton>
@@ -86,7 +97,7 @@ export function CourseCard({
         <DeleteCourseButton
           courseId={id}
           title={title}
-          className={`${ICON_BASE} hover:bg-red-500/10 hover:text-red-600 disabled:animate-pulse dark:hover:bg-red-500/15 dark:hover:text-red-400`}
+          className={`${ICON_BASE} hover:bg-red-500/10 hover:text-danger disabled:animate-pulse`}
         >
           <svg aria-hidden viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
             <path

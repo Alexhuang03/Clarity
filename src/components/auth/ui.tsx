@@ -2,12 +2,14 @@
 
 import { useEffect, useId, useState } from "react";
 import { PASSWORD_RULES } from "@/lib/auth-errors";
+import BlurText from "@/components/reactbits/BlurText";
+import { GridBackground } from "@/components/ui/grid-background";
+import { Logo } from "@/components/ui/logo";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
-export const inputClass =
-  "w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 outline-none focus:border-indigo-500 dark:border-white/20";
-export const primaryButton =
-  "w-full rounded-lg bg-indigo-600 px-3 py-2 font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50";
-export const linkClass = "text-indigo-600 hover:underline dark:text-indigo-400";
+export const inputClass = "field";
+export const primaryButton = "btn btn-primary w-full py-2.5";
+export const linkClass = "text-accent-text underline-offset-4 hover:underline";
 
 export function AuthCard({
   title,
@@ -21,15 +23,32 @@ export function AuthCard({
   footer?: React.ReactNode;
 }) {
   return (
-    <main className="flex flex-1 items-center justify-center px-4 py-10">
+    <main className="relative isolate flex flex-1 items-center justify-center overflow-hidden px-4 py-12">
+      {/* Fond : grille qui défile lentement + halo d'accent très diffus */}
+      <GridBackground moving />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-[18%] -z-10 h-72 w-[min(40rem,90vw)] -translate-x-1/2 rounded-full bg-accent-soft blur-3xl"
+      />
+      <ThemeToggle className="absolute right-4 top-4" />
       <div className="w-full max-w-sm">
-        <p className="mb-6 text-center text-lg font-semibold tracking-tight">Clarity</p>
-        <div className="rounded-2xl border border-black/10 p-8 shadow-sm dark:border-white/15">
-          <h1 className="text-xl font-semibold">{title}</h1>
-          {subtitle && <p className="mt-1 text-sm opacity-70">{subtitle}</p>}
+        <div className="mb-8 flex flex-col items-center text-center">
+          <Logo href={null} className="text-lg" />
+          <BlurText
+            text="Tes cours, expliqués simplement."
+            trigger="load"
+            delay={70}
+            distance={12}
+            blur={8}
+            className="mt-4 justify-center font-display text-2xl italic text-muted"
+          />
+        </div>
+        <div className="card rise-in p-8">
+          <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+          {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
           <div className="mt-6">{children}</div>
         </div>
-        {footer && <div className="mt-4 text-center text-sm opacity-80">{footer}</div>}
+        {footer && <div className="mt-6 text-center text-sm text-muted">{footer}</div>}
       </div>
     </main>
   );
@@ -44,7 +63,7 @@ export function Field({
 }) {
   const id = useId();
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       <label htmlFor={id} className="text-sm font-medium">
         {label}
       </label>
@@ -82,7 +101,7 @@ export function PasswordInput({
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
-        className="absolute inset-y-0 right-2 my-auto h-7 rounded px-2 text-xs opacity-70 hover:opacity-100"
+        className="absolute inset-y-0 right-2 my-auto h-7 rounded-md px-2 text-xs text-muted transition hover:bg-surface-2 hover:text-foreground"
         aria-label={visible ? "Masquer le mot de passe" : "Afficher le mot de passe"}
       >
         {visible ? "Masquer" : "Afficher"}
@@ -97,7 +116,7 @@ export function PasswordRules({ password }: { password: string }) {
       {PASSWORD_RULES.map((rule) => {
         const ok = rule.test(password);
         return (
-          <li key={rule.label} className={ok ? "text-green-600 dark:text-green-400" : "opacity-60"}>
+          <li key={rule.label} className={`transition-colors ${ok ? "text-success" : "text-muted"}`}>
             {ok ? "✓" : "○"} {rule.label}
           </li>
         );
@@ -155,7 +174,7 @@ export function ResendButton({ onResend }: { onResend: () => Promise<boolean> })
       type="button"
       disabled={remaining > 0 || sending}
       onClick={resend}
-      className="w-full text-sm opacity-70 hover:opacity-100 disabled:cursor-not-allowed disabled:hover:opacity-70"
+      className="w-full text-sm text-muted transition hover:text-foreground disabled:cursor-not-allowed disabled:hover:text-muted"
     >
       {sending
         ? "Envoi…"
@@ -171,10 +190,8 @@ export function Message({ type, children }: { type: "error" | "info"; children: 
   return (
     <p
       role={type === "error" ? "alert" : "status"}
-      className={`mt-4 rounded-lg px-3 py-2 text-sm ${
-        type === "error"
-          ? "bg-red-500/10 text-red-700 dark:text-red-400"
-          : "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300"
+      className={`mt-4 rounded-xl px-3 py-2 text-sm ${
+        type === "error" ? "bg-red-500/10 text-danger" : "bg-accent-soft text-accent-text"
       }`}
     >
       {children}

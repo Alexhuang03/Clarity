@@ -1,4 +1,5 @@
 import type { AuthError } from "@supabase/supabase-js";
+import { safeRedirectPath } from "@/lib/security/redirect";
 
 // Traduit les erreurs Supabase Auth en messages compréhensibles.
 const MESSAGES: Record<string, string> = {
@@ -37,7 +38,7 @@ export function isPasswordValid(password: string) {
   return PASSWORD_RULES.every((rule) => rule.test(password));
 }
 
-// Empêche les redirections vers un autre site après connexion (?next=https://...)
+// Empêche les redirections vers un autre site après connexion (?next=https://..., //site, /\site)
 export function safeNextPath(next: string | null): string {
-  return next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+  return safeRedirectPath(next);
 }

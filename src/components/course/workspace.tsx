@@ -28,12 +28,12 @@ const replacedBy = (from: MessageRow) => (m: MessageRow) => m.kind === "chat" &&
 function AssistantHeader({ kind, partTitle }: { kind: "summary" | "chat"; partTitle?: string }) {
   return (
     <div className="mb-3 flex items-center gap-2">
-      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-foreground font-display text-[0.95rem] italic text-background">
         C
       </span>
       <span className="text-sm font-semibold">Clarity</span>
       {kind === "summary" && (
-        <span className="truncate rounded-full bg-indigo-500/10 px-2.5 py-0.5 text-xs font-medium text-indigo-700 dark:text-indigo-300">
+        <span className="truncate rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent-text">
           Résumé{partTitle ? ` · ${partTitle}` : ""}
         </span>
       )}
@@ -133,7 +133,7 @@ export const MessageItem = memo(function MessageItem({
     return (
       <div className="group flex items-start justify-end gap-1.5 pt-2">
         {onRewind && onDelete && saved && <QuestionActions message={message} onRewind={onRewind} onDelete={onDelete} />}
-        <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-indigo-600 px-4 py-2.5 leading-relaxed text-white">
+        <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-accent px-4 py-2.5 leading-relaxed text-accent-foreground">
           {message.content}
         </p>
       </div>
@@ -209,12 +209,12 @@ function ChatInput({
 
   return (
     // Fondu sous la barre : le texte qui défile ne se voit plus à travers
-    <div className="sticky bottom-0 z-10 -mx-4 bg-gradient-to-t from-[var(--background)] from-55% to-transparent px-4 pb-4 pt-10">
+    <div className="sticky bottom-0 z-10 -mx-4 bg-gradient-to-t from-background from-55% to-transparent px-4 pb-4 pt-10">
       <UploadChips uploads={uploads} documents={documents} onDismiss={onDismissUpload} />
       {rewind && (
         <div
           role="status"
-          className="mx-auto mb-2 flex max-w-[40rem] items-start gap-3 rounded-xl border border-indigo-500/30 bg-[var(--background)] px-3 py-2 text-sm shadow-sm"
+          className="mx-auto mb-2 flex max-w-[40rem] items-start gap-3 rounded-xl border border-accent/30 bg-surface px-3 py-2 text-sm shadow-card"
         >
           <span aria-hidden className="mt-0.5 text-indigo-600 dark:text-indigo-400">↶</span>
           <p className="min-w-0 flex-1">
@@ -239,7 +239,7 @@ function ChatInput({
       )}
       <form
         onSubmit={submit}
-        className="mx-auto flex max-w-[40rem] items-end gap-2 rounded-[1.6rem] border border-black/10 bg-[var(--background)] p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition focus-within:border-indigo-500/50 dark:border-white/10 dark:bg-[#151515] dark:shadow-[0_8px_30px_rgba(0,0,0,0.6)]"
+        className="mx-auto flex max-w-[40rem] items-end gap-2 rounded-[1.6rem] border border-line bg-surface p-1.5 shadow-pop transition focus-within:border-accent/50 focus-within:ring-4 focus-within:ring-accent-soft"
       >
         <AddDocumentsButton onFiles={onFiles} onLink={onLink} />
         <textarea
@@ -263,7 +263,7 @@ function ChatInput({
           disabled={busy || disabled || !value.trim()}
           aria-label="Envoyer"
           title="Envoyer (Entrée)"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white transition hover:bg-indigo-500 disabled:bg-black/10 disabled:text-black/40 dark:disabled:bg-white/10 dark:disabled:text-white/40"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground transition hover:bg-accent-hover disabled:bg-surface-2 disabled:text-muted"
         >
           <svg aria-hidden viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
             <path strokeLinecap="round" strokeLinejoin="round" d="M10 16V4M5 9l5-5 5 5" />
@@ -472,6 +472,7 @@ export function Workspace({
   return (
     <>
       <CourseHeader
+        courseId={course.id}
         title={course.title}
         subject={course.subject?.name ?? null}
         outline={<OutlineButton messages={shown} parts={parts} documents={documents} onDocumentsChange={setDocuments} onDocumentsSettled={refreshParts} />}
@@ -491,9 +492,9 @@ export function Workspace({
           )}
 
           {ready.length > 0 && !analyzedAt && !processing && (
-            <div className="rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-6 text-center">
+            <div className="card rise-in p-6 text-center">
               <p className="font-medium">Tes documents sont prêts.</p>
-              <p className="mt-1 text-sm opacity-70">
+              <p className="mt-1 text-sm text-muted">
                 Ajoute tous tes fichiers (cours et exercices) avant de lancer : le résumé s&apos;appuie sur
                 l&apos;ensemble.
               </p>
@@ -501,7 +502,7 @@ export function Workspace({
                 type="button"
                 onClick={analyze}
                 disabled={busy}
-                className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                className="btn btn-primary mt-4"
               >
                 {analyzing ? "Analyse du cours…" : "Analyser et résumer le cours"}
               </button>
@@ -545,7 +546,7 @@ export function Workspace({
           )}
 
           {pendingParts.length > 0 && !streaming && (
-            <div className="rounded-2xl border border-black/10 p-5 dark:border-white/15">
+            <div className="card p-5">
               <p className="font-medium">
                 {summarizedParts.size === 0
                   ? `Ce cours est long : je l'ai découpé en ${parts.length} parties. Par laquelle veux-tu commencer ?`
@@ -558,7 +559,7 @@ export function Workspace({
                       type="button"
                       onClick={() => generateSummary(part)}
                       disabled={busy}
-                      className="w-full rounded-lg border border-black/10 px-4 py-2 text-left hover:border-indigo-500 hover:bg-indigo-500/5 disabled:opacity-50 dark:border-white/15"
+                      className="w-full rounded-xl border border-line px-4 py-2 text-left transition hover:border-accent/50 hover:bg-accent-soft disabled:opacity-50"
                     >
                       <span className="mr-2 opacity-50">{part.ordinal + 1}.</span>
                       {part.title}

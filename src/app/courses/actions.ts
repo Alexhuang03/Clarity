@@ -7,14 +7,20 @@ import { analyzeCourse as runAnalysis, syncCourseParts } from "@/lib/course/anal
 import { enqueueDocument } from "@/lib/ingest/queue";
 import { UserFacingError } from "@/lib/ingest/extract";
 import { fetchLink } from "@/lib/ingest/link";
+import { enforceRateLimits, RATE_LIMITS } from "@/lib/security/rate-limit";
+import { cleanText, isUuid, oneOf, requireOwnedCourse } from "@/lib/security/request";
 import { createClient } from "@/lib/supabase/server";
+
+const TITLE_MAX = 120;
+const SUBJECT_MAX = 60;
+const FILENAME_MAX = 200;
 
 export async function createCourse(
   _prev: { error: string | null },
   formData: FormData,
 ): Promise<{ error: string | null }> {
-  const title = String(formData.get("title") ?? "").trim();
-  const subjectName = String(formData.get("subject") ?? "").trim();
+  const title = cleanText(formData.get("title"), TITLE_MAX);
+  const subjectName = cleanText(formData.get("subject"), SUBJECT_MAX);
   if (!title) return { error: "Donne un titre à ton cours." };
 
   await getCurrentUser();
@@ -33,6 +39,7 @@ export async function createCourse(
 export async function deleteCourse(courseId: string) {
   const user = await getCurrentUser();
   const supabase = await createClient();
+  if (!(await requireOwnedCourse(supabase, courseId))) redirect("/");
   const { data: docs } = await supabase.from("documents").select("storage_path").eq("course_id", courseId);
   if (docs?.length) await supabase.storage.from("documents").remove(docs.map((d) => d.storage_path));
   const { data: course } = await supabase.from("courses").select("subject_id").eq("id", courseId).maybeSingle();
@@ -42,15 +49,13 @@ export async function deleteCourse(courseId: string) {
   redirect("/");
 }
 
-const TITLE_MAX = 120;
-const SUBJECT_MAX = 60;
-
 export async function updateCourse(
   courseId: string,
   input: { title: string; subject: string },
 ): Promise<{ error: string | null }> {
-  const title = input.title.trim().slice(0, TITLE_MAX);
-  const subjectName = input.subject.trim().slice(0, SUBJECT_MAX);
+  const title = cleanText(input?.title, TITLE_MAX);
+  const subjectName = cleanText(input?.subject, SUBJECT_MAX);
+  if (!isUuid(courseId)) return { error: "Cours introuvable." };
   if (!title) return { error: "Le titre ne peut pas être vide." };
 
   await getCurrentUser();
@@ -92,7 +97,20 @@ async function deleteSubjectIfUnused(supabase: ServerSupabase, subjectId: string
   if (count === 0) await supabase.from("subjects").delete().eq("id", subjectId);
 }
 
-const ALLOWED_EXTENSIONS = ["pdf", "md", "txt", "docx", "pptx", "png", "jpg", "jpeg", "webp"];
+// Type MIME déduit de l'extension côté serveur (celui envoyé par le navigateur n'est pas fiable)
+const MIME_BY_EXT: Record<string, string> = {
+  pdf: "application/pdf",
+  md: "text/markdown",
+  txt: "text/plain",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+};
+// Nom de fichier dans le stockage : <uuid>.<ext> (voir useDocumentUpload)
+const SAFE_STORAGE_NAME = /^[0-9a-f-]{36}\.[a-z]{2,4}$/i;
 
 /** Enregistre un fichier déjà uploadé dans le stockage, puis lance son traitement en arrière-plan. */
 export async function registerDocument(input: {
@@ -103,20 +121,36 @@ export async function registerDocument(input: {
   kind: "cours" | "exo";
 }) {
   const user = await getCurrentUser();
-  const ext = input.filename.split(".").pop()?.toLowerCase() ?? "";
-  // Le chemin doit être dans le dossier de l'utilisateur et du cours (pas celui d'un autre)
-  if (!input.storagePath.startsWith(`${user.id}/${input.courseId}/`) || !ALLOWED_EXTENSIONS.includes(ext)) {
+  const filename = cleanText(input?.filename, FILENAME_MAX).replace(/[\\/]/g, "_");
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  const storagePath = typeof input?.storagePath === "string" ? input.storagePath : "";
+  const prefix = `${user.id}/${input?.courseId}/`;
+  // Le chemin doit être dans le dossier de l'utilisateur et du cours (pas celui d'un autre), sans « .. »
+  if (
+    !isUuid(input?.courseId) ||
+    !storagePath.startsWith(prefix) ||
+    !SAFE_STORAGE_NAME.test(storagePath.slice(prefix.length)) ||
+    !MIME_BY_EXT[ext]
+  ) {
     return { error: "Fichier refusé." };
   }
   const supabase = await createClient();
+  // RLS : le cours doit appartenir à l'utilisateur
+  const course = await requireOwnedCourse(supabase, input.courseId);
+  if (!course) return { error: "Cours introuvable." };
+  const limited = await enforceRateLimits(user.id, RATE_LIMITS.ingest);
+  if (!limited.ok) {
+    await supabase.storage.from("documents").remove([storagePath]);
+    return { error: limited.message };
+  }
   const { data: doc, error } = await supabase
     .from("documents")
     .insert({
-      course_id: input.courseId,
-      storage_path: input.storagePath,
-      filename: input.filename,
-      mime_type: input.mimeType || "application/octet-stream",
-      kind: input.kind === "exo" ? "exo" : "cours",
+      course_id: course.id,
+      storage_path: storagePath,
+      filename,
+      mime_type: MIME_BY_EXT[ext],
+      kind: oneOf(input.kind, ["cours", "exo"] as const, "cours"),
     })
     .select()
     .single();
@@ -129,11 +163,13 @@ export async function registerDocument(input: {
 }
 
 export async function retryDocument(documentId: string) {
-  await getCurrentUser();
+  const user = await getCurrentUser();
+  if (!isUuid(documentId)) return;
   const supabase = await createClient();
   // RLS : ne renvoie le document que s'il appartient à l'utilisateur
   const { data: doc } = await supabase.from("documents").select("id").eq("id", documentId).maybeSingle();
   if (!doc) return;
+  if (!(await enforceRateLimits(user.id, RATE_LIMITS.ingest)).ok) return;
   await supabase.from("documents").update({ status: "uploaded", progress: 0, error: null }).eq("id", doc.id);
   enqueueDocument(doc.id);
 }
@@ -150,12 +186,16 @@ export async function deleteDocument(documentId: string) {
 export async function changeDocumentKind(documentId: string, kind: "cours" | "exo") {
   await getCurrentUser();
   const supabase = await createClient();
+  if (kind !== "cours" && kind !== "exo") return;
   await supabase.from("documents").update({ kind }).eq("id", documentId);
 }
 
 export async function analyzeCourse(courseId: string) {
-  await getCurrentUser();
+  const user = await getCurrentUser();
   const supabase = await createClient();
+  if (!(await requireOwnedCourse(supabase, courseId))) return { error: "Cours introuvable." };
+  const limited = await enforceRateLimits(user.id, RATE_LIMITS.analyze);
+  if (!limited.ok) return { error: limited.message };
   try {
     const parts = await runAnalysis(supabase, courseId);
     return { parts };
@@ -212,8 +252,11 @@ export async function unshareCourse(courseId: string) {
  * sans toucher aux parties déjà résumées. Renvoie les parties à jour.
  */
 export async function syncParts(courseId: string) {
-  await getCurrentUser();
+  const user = await getCurrentUser();
   const supabase = await createClient();
+  if (!(await requireOwnedCourse(supabase, courseId))) return { error: "Cours introuvable." };
+  const limited = await enforceRateLimits(user.id, RATE_LIMITS.analyze);
+  if (!limited.ok) return { error: limited.message };
   try {
     return { parts: await syncCourseParts(supabase, courseId) };
   } catch (error) {
@@ -229,12 +272,15 @@ export async function syncParts(courseId: string) {
 export async function addLink(input: { courseId: string; url: string; kind: "cours" | "exo" }) {
   const user = await getCurrentUser();
   const supabase = await createClient();
-  const url = String(input.url ?? "").trim().slice(0, 2000);
+  const url = cleanText(input?.url, 2000);
+  if (!url) return { error: "Ce n'est pas un lien valide." };
   // RLS : le cours doit être à l'utilisateur
-  const { data: course } = await supabase.from("courses").select("id").eq("id", input.courseId).maybeSingle();
+  const course = await requireOwnedCourse(supabase, input?.courseId);
   if (!course) return { error: "Cours introuvable." };
   const { data: duplicate } = await supabase.from("documents").select("id").eq("course_id", course.id).eq("source_url", url).limit(1);
   if (duplicate?.length) return { error: "Ce lien est déjà dans le cours." };
+  const limited = await enforceRateLimits(user.id, RATE_LIMITS.ingest);
+  if (!limited.ok) return { error: limited.message };
 
   let fetched;
   try {
@@ -254,7 +300,7 @@ export async function addLink(input: { courseId: string; url: string; kind: "cou
       storage_path: path,
       filename: fetched.filename,
       mime_type: fetched.mimeType,
-      kind: input.kind === "exo" ? "exo" : "cours",
+      kind: oneOf(input.kind, ["cours", "exo"] as const, "cours"),
       source_url: url,
     })
     .select()

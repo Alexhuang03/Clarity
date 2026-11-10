@@ -8,9 +8,11 @@ import { bubblePrompt } from "@/lib/course/prompts";
 import { searchCourse } from "@/lib/course/retrieve";
 import { finalizeCitations, formatSources, numberSources, type Source, type SourceChunk } from "@/lib/course/sources";
 import { ndjsonResponse, streamAnswer } from "@/lib/course/stream";
-import { createClient } from "@/lib/supabase/server";
+import { LLM_INPUT_LIMITS } from "@/lib/security/llm";
+import { enforceRateLimits, RATE_LIMITS, rateLimitResponse } from "@/lib/security/rate-limit";
+import { cleanText, isUuid, jsonError, readJsonBody, requireUser } from "@/lib/security/request";
 
-const MESSAGE_MAX = 4000;
+const MESSAGE_MAX = LLM_INPUT_LIMITS.note;
 // Un fil reste une petite discussion : au-delà, mieux vaut poser la question dans le chat
 const THREAD_MAX = 20;
 // Groq gratuit : 8 000 tokens par minute. Une bulle reste petite (contexte et extraits limités).
@@ -60,12 +62,14 @@ const OPENING: Record<ThreadKind, (note: string) => string> = {
  */
 export async function POST(request: Request, ctx: RouteContext<"/api/annotations/[id]/reply">) {
   const { id } = await ctx.params;
-  const body = (await request.json().catch(() => ({}))) as { content?: unknown };
-  const followUp = typeof body.content === "string" ? body.content.trim().slice(0, MESSAGE_MAX) : "";
+  if (!isUuid(id)) return jsonError("Annotation introuvable.", 404);
+  const body = await readJsonBody<{ content: unknown }>(request);
+  if (body instanceof Response) return body;
+  const followUp = cleanText(body.content, MESSAGE_MAX);
 
-  const supabase = await createClient();
-  const { data: auth } = await supabase.auth.getClaims();
-  if (!auth?.claims) return Response.json({ error: "Non connecté." }, { status: 401 });
+  const auth = await requireUser();
+  if (auth instanceof Response) return auth;
+  const { supabase, user } = auth;
 
   const { data } = await supabase
     .from("annotations")
@@ -93,6 +97,9 @@ export async function POST(request: Request, ctx: RouteContext<"/api/annotations
 
   const course = await loadCourseContext(supabase, annotation.message.course_id);
   if (!course) return Response.json({ error: "Cours introuvable." }, { status: 404 });
+
+  const limited = await enforceRateLimits(user.id, RATE_LIMITS.annotationReply);
+  if (!limited.ok) return rateLimitResponse(limited);
 
   let userRow: unknown = null;
   if (followUp) {
