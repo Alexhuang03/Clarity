@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 import { authErrorMessage, isPasswordValid } from "@/lib/auth-errors";
 import { suggestEmail } from "@/lib/email-check";
 import { checkEmailDomain } from "./actions";
+import { LegalDialog } from "@/components/legal/legal-dialog";
+import { LEGAL_VERSION, type LegalTab } from "@/components/legal/content";
 import {
   AuthCard,
   CodeInput,
@@ -31,10 +33,12 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<React.ReactNode>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [accepted, setAccepted] = useState(false);
+  const [legalTab, setLegalTab] = useState<LegalTab | null>(null);
 
   const suggestion = suggestEmail(email);
   const passwordsMatch = confirm.length > 0 && password === confirm;
-  const canSubmit = isPasswordValid(password) && passwordsMatch && !loading;
+  const canSubmit = isPasswordValid(password) && passwordsMatch && accepted && !loading;
 
   async function signUp(e: React.FormEvent) {
     e.preventDefault();
@@ -49,7 +53,12 @@ export default function SignupPage() {
         `Le domaine « ${email.split("@")[1]} » ne peut pas recevoir d'emails. Vérifie ton adresse.`,
       );
     }
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    // Preuve du consentement (RGPD) : version des textes acceptée et date, gardées dans le compte
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { legal_version: LEGAL_VERSION, legal_accepted_at: new Date().toISOString() } },
+    });
     setLoading(false);
     // Selon la version de Supabase, un compte existant donne une erreur explicite
     // ou un utilisateur sans identité (pour ne pas révéler que l'email est inscrit).
@@ -212,11 +221,32 @@ export default function SignupPage() {
             </>
           )}
         </Field>
+        <label className="flex cursor-pointer items-start gap-3 text-sm leading-relaxed">
+          <input
+            type="checkbox"
+            required
+            checked={accepted}
+            onChange={(e) => setAccepted(e.target.checked)}
+            className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded accent-[var(--accent)]"
+          />
+          <span className="text-muted">
+            J&apos;accepte les{" "}
+            <button type="button" onClick={() => setLegalTab("cgu")} className={linkClass}>
+              Conditions d&apos;utilisation
+            </button>{" "}
+            et la{" "}
+            <button type="button" onClick={() => setLegalTab("confidentialite")} className={linkClass}>
+              Politique de confidentialité
+            </button>
+            .
+          </span>
+        </label>
         <button disabled={!canSubmit} className={primaryButton}>
           {loading ? "Création…" : "Créer mon compte"}
         </button>
       </form>
       <Message type="error">{error}</Message>
+      <LegalDialog open={legalTab !== null} initialTab={legalTab ?? "cgu"} onClose={() => setLegalTab(null)} />
     </AuthCard>
   );
 }

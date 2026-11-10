@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 
@@ -52,6 +53,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <footer className="px-4 pb-4 pt-8 text-center text-[0.65rem] leading-relaxed text-muted opacity-70">
           Icônes de pings, sons et émotes © Riot Games, Inc., via le projet lolPing. Clarity n&apos;est pas approuvé par
           Riot Games et ne reflète pas les opinions de Riot Games.
+          <br />
+          <Link href="/legal" className="underline-offset-4 hover:text-foreground hover:underline">
+            Mentions légales · Conditions · Confidentialité
+          </Link>
         </footer>
       </body>
     </html>

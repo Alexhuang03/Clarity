@@ -3,8 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // Pages accessibles sans être connecté (un utilisateur connecté y est renvoyé vers l'accueil)
 const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password"];
-// Pages accessibles à tous, connecté ou non (liens de partage)
-const OPEN_PATHS = ["/share/"];
+// Pages accessibles à tous, connecté ou non (liens de partage, textes juridiques)
+const OPEN_PATHS = ["/share/", "/legal"];
 
 // Rafraîchit la session Supabase et redirige vers /login si l'utilisateur n'est pas connecté.
 export async function updateSession(request: NextRequest) {

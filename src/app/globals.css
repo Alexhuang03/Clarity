@@ -293,3 +293,33 @@ body {
     animation-delay: 0s !important;
   }
 }
+
+/* Fenêtre « Cadre légal » (élément <dialog> natif) */
+.legal-dialog[open] {
+  animation: legal-in 0.22s var(--ease-out-soft, ease-out);
+}
+.legal-dialog[open]::backdrop {
+  animation: page-fade 0.22s ease-out;
+}
+@keyframes legal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .legal-dialog[open],
+  .legal-dialog[open]::backdrop {
+    animation: none;
+  }
+}
+
+/* Edge ajoute son propre bouton « œil » aux mots de passe, en doublon de notre bouton « Afficher » */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+
+/* Barre de défilement fine et discrète dans la fenêtre « Cadre légal » */
+.legal-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong, rgba(127, 127, 127, 0.4)) transparent;
+}
