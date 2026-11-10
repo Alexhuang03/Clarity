@@ -25,15 +25,22 @@ const isAnswered = (value: AnswerValue | undefined) =>
 
 const storageKey = (attemptId: string) => `clarity-answers-${attemptId}`;
 
-/** Réponses gardées dans le navigateur : un rechargement de page ne fait rien perdre. */
-function loadAnswers(attemptId: string): Answers {
-  if (typeof window === "undefined") return {};
+/**
+ * Réponses gardées dans le navigateur (un rechargement ne fait rien perdre), sinon le brouillon
+ * enregistré sur le serveur (reprise depuis un autre appareil).
+ */
+function loadAnswers(attemptId: string, fallback: Answers): Answers {
+  if (typeof window === "undefined") return fallback;
   try {
-    return JSON.parse(localStorage.getItem(storageKey(attemptId)) ?? "{}") as Answers;
+    const local = JSON.parse(localStorage.getItem(storageKey(attemptId)) ?? "{}") as Answers;
+    return Object.keys(local).length > 0 ? local : fallback;
   } catch {
-    return {};
+    return fallback;
   }
 }
+
+// Délai avant d'enregistrer le brouillon sur le serveur après une modification
+const DRAFT_DELAY_MS = 1500;
 
 function formatClock(totalSeconds: number) {
   const s = Math.max(0, Math.ceil(totalSeconds));
@@ -190,17 +197,20 @@ export function QuizPlayer({
   courseId,
   quiz,
   attempt,
+  initialAnswers = {},
   onGraded,
   onQuit,
 }: {
   courseId: string;
   quiz: PublicQuiz;
   attempt: AttemptSummary;
+  /** Brouillon enregistré sur le serveur (GET de la tentative) */
+  initialAnswers?: Answers;
   onGraded: (result: AttemptResult) => void;
   onQuit: () => void;
 }) {
   const questions = quiz.questions;
-  const [answers, setAnswers] = useState<Answers>(() => loadAnswers(attempt.id));
+  const [answers, setAnswers] = useState<Answers>(() => loadAnswers(attempt.id, initialAnswers));
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState(1);
   const [submitting, setSubmitting] = useState(false);
@@ -209,14 +219,31 @@ export function QuizPlayer({
   const [timeUp, setTimeUp] = useState(false);
   const reduce = useReducedMotion();
   const answersRef = useRef(answers);
+  // Remise automatique (fin du chrono) : une seule fois, même si elle échoue (sinon relance en boucle)
+  const autoSubmitted = useRef(false);
+  const savedDraft = useRef(JSON.stringify(answers));
   useEffect(() => {
     answersRef.current = answers;
+    const json = JSON.stringify(answers);
     try {
-      localStorage.setItem(storageKey(attempt.id), JSON.stringify(answers));
+      localStorage.setItem(storageKey(attempt.id), json);
     } catch {
       // Stockage indisponible : les réponses restent en mémoire
     }
-  }, [answers, attempt.id]);
+    if (json === savedDraft.current) return;
+    // Brouillon sur le serveur, regroupé : reprise possible depuis un autre appareil
+    const timer = setTimeout(() => {
+      studyApi(courseId, `/quizzes/${quiz.id}/attempts/${attempt.id}`, { method: "PATCH", body: { answers } }).then(
+        () => {
+          savedDraft.current = json;
+        },
+        () => {
+          // Sans gravité : les réponses restent dans le navigateur et seront envoyées à la remise
+        },
+      );
+    }, DRAFT_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [answers, attempt.id, courseId, quiz.id]);
 
   const needsAi = questions.some((q) => q.type === "short" || q.type === "open");
   const question = questions[index];
@@ -275,6 +302,8 @@ export function QuizPlayer({
           <Countdown
             deadlineAt={attempt.deadlineAt}
             onExpire={() => {
+              if (autoSubmitted.current) return;
+              autoSubmitted.current = true;
               setTimeUp(true);
               void submit();
             }}

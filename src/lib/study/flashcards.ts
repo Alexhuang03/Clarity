@@ -108,7 +108,12 @@ export const reviewSchema = v.object({ rating: v.literal<Rating>("again", "hard"
 
 // ------------------------------------------------------------------ Paquets
 
-async function deckSummaries({ supabase, courseId }: Session, deckIds?: string[]): Promise<DeckSummary[]> {
+/** dueBefore : date limite de dueCount (défaut maintenant ; ex. fin de la journée locale pour « aujourd'hui »). */
+async function deckSummaries(
+  { supabase, courseId }: Session,
+  deckIds?: string[],
+  dueBefore?: Date,
+): Promise<DeckSummary[]> {
   let query = supabase.from("study_decks").select("id, title, created_at").eq("course_id", courseId);
   if (deckIds) query = query.in("id", deckIds);
   const { data: decks, error } = await query.order("created_at", { ascending: false }).limit(DECKS_MAX);
@@ -120,7 +125,7 @@ async function deckSummaries({ supabase, courseId }: Session, deckIds?: string[]
     .in("deck_id", decks.map((d) => d.id))
     .limit(20_000);
   if (cardsError) dbError(cardsError);
-  const now = Date.now();
+  const now = (dueBefore ?? new Date()).getTime();
   const counts = new Map<string, { card: number; due: number; fresh: number }>();
   for (const c of cards ?? []) {
     const s = counts.get(c.deck_id) ?? { card: 0, due: 0, fresh: 0 };
@@ -139,7 +144,7 @@ async function deckSummaries({ supabase, courseId }: Session, deckIds?: string[]
   }));
 }
 
-export const listDecks = (session: Session) => deckSummaries(session);
+export const listDecks = (session: Session, dueBefore?: Date) => deckSummaries(session, undefined, dueBefore);
 
 const cardsSchema = (count: number) =>
   v.object({

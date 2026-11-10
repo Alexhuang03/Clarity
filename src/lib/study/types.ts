@@ -124,6 +124,8 @@ export type QuizSummary = {
   attemptCount: number;
   bestPercent: number | null;
   lastPercent: number | null;
+  /** Dernière tentative commencée et pas encore corrigée (à reprendre), null sinon */
+  inProgress: AttemptSummary | null;
 };
 
 /** Quiz sans les réponses. */
@@ -174,8 +176,12 @@ export type AttemptResult = AttemptSummary & {
 export type SubmitAttemptRequest = { answers: Answers };
 
 /** GET ou POST /study/quizzes/[quizId]/attempts/[attemptId] — réponse. */
+/** PATCH d'une tentative en cours : enregistre le brouillon des réponses (reprise sur un autre appareil). */
+export type SaveDraftRequest = { answers: Answers };
+
 export type AttemptResponse =
-  | { status: "in_progress"; attempt: AttemptSummary }
+  /** answers : brouillon enregistré (PATCH), ou réponses déjà envoyées si la correction est à relancer */
+  | { status: "in_progress"; attempt: AttemptSummary; answers: Answers }
   | { status: "submitted"; attempt: AttemptResult };
 
 // ------------------------------------------------------------------ Flashcards

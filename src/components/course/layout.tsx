@@ -6,8 +6,11 @@
 export const COURSE_FRAME =
   "mx-auto w-full max-w-[46rem] px-4 xl:grid xl:max-w-none xl:grid-cols-[minmax(0,1fr)_minmax(0,46rem)_minmax(0,1fr)] xl:gap-12 xl:px-8";
 
-/** Élément placé dans la marge de gauche (même largeur que le sommaire). */
-export const COURSE_MARGIN = "xl:w-60 xl:justify-self-end";
+/**
+ * Élément placé dans la marge de gauche (même largeur que le sommaire) : 15rem au plus, moins si la marge
+ * est plus étroite (vers 1280 px, une largeur fixe débordait hors de l'écran à gauche).
+ */
+export const COURSE_MARGIN = "xl:w-full xl:max-w-60 xl:justify-self-end";
 
 export function CourseColumns({ aside, children }: { aside: React.ReactNode; children: React.ReactNode }) {
   return (

@@ -87,7 +87,8 @@ Réponse : `{ quizzes: QuizSummary[] }` (100 plus récents)
 
 ```ts
 type QuizSummary = { id; mode: QuizMode; title; questionCount: number; timeLimitSec: number | null; createdAt;
-                     attemptCount: number /* remises */; bestPercent: number | null; lastPercent: number | null };
+                     attemptCount: number /* remises */; bestPercent: number | null; lastPercent: number | null;
+                     inProgress: AttemptSummary | null /* dernière tentative pas encore corrigée : bouton « Reprendre » */ };
 ```
 
 ### `GET /study/quizzes/{quizId}` — détail
@@ -108,9 +109,13 @@ Réponse : `AttemptResponse`
 
 ```ts
 type AttemptResponse =
-  | { status: "in_progress"; attempt: AttemptSummary }
+  | { status: "in_progress"; attempt: AttemptSummary; answers: Answers /* brouillon enregistré (voir PATCH) */ }
   | { status: "submitted"; attempt: AttemptResult };
 ```
+
+### `PATCH /study/quizzes/{quizId}/attempts/{attemptId}` — enregistrer le brouillon
+
+Corps : `SaveDraftRequest = { answers: Answers }`. Réponse : `{ ok: true }`. Remplace le brouillon de la tentative (réponses de forme invalide ignorées), rendu par le `GET` ci-dessus : la tentative peut être reprise sur un autre appareil. Sans effet une fois les réponses envoyées. Limite : 240 enregistrements / 10 min (l'interface regroupe les modifications, 1,5 s après la dernière).
 
 ### `POST /study/quizzes/{quizId}/attempts/{attemptId}` — remettre et corriger
 
@@ -168,11 +173,11 @@ type IntervalPreview = Record<Rating, number>; // jours ; < 1 = fraction de jour
 type Rating = "again" | "hard" | "good" | "easy";
 ```
 
-Une nouvelle carte est due immédiatement (`dueAt` = création). `dueCount` = cartes non suspendues dont `dueAt` ≤ maintenant ; `newCount` = jamais révisées.
+Une nouvelle carte est due immédiatement (`dueAt` = création). `dueCount` = cartes non suspendues dont `dueAt` ≤ maintenant (ou ≤ `before` pour `GET /study/decks?before=date ISO`, ex. fin de la journée locale : « à réviser aujourd'hui ») ; `newCount` = jamais révisées.
 
 | Méthode | Chemin | Corps | Réponse |
 | --- | --- | --- | --- |
-| GET | `/study/decks` | — | `{ decks: DeckSummary[] }` |
+| GET | `/study/decks?before=` | — | `{ decks: DeckSummary[] }` (`before` facultatif : voir ci-dessous) |
 | POST | `/study/decks` | `CreateDeckRequest` | `201` `DeckResponse` |
 | GET | `/study/decks/{deckId}` | — | `DeckResponse` (cartes par date de création) |
 | PATCH | `/study/decks/{deckId}` | `UpdateDeckRequest = { title: string }` (200 car. max) | `DeckResponse` |

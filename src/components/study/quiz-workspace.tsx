@@ -4,6 +4,7 @@ import { useState } from "react";
 import type {
   AttemptResponse,
   AttemptResult,
+  Answers,
   AttemptSummary,
   CreateQuizRequest,
   CreateQuizResponse,
@@ -23,7 +24,7 @@ type View =
   | { kind: "generating" }
   | { kind: "loading" }
   | { kind: "detail"; quiz: PublicQuiz; attempts: AttemptSummary[] }
-  | { kind: "play"; quiz: PublicQuiz; attempt: AttemptSummary }
+  | { kind: "play"; quiz: PublicQuiz; attempt: AttemptSummary; answers?: Answers }
   | { kind: "result"; quiz: PublicQuiz; result: AttemptResult };
 
 const MODE_LABEL: Record<QuizMode, string> = { quiz: "Quiz", exam: "Examen blanc", quick: "Test rapide" };
@@ -85,11 +86,20 @@ export function QuizWorkspace({
       return { kind: "play", quiz, attempt };
     });
 
-  const openAttempt = (quiz: PublicQuiz, attempt: AttemptSummary) =>
+  const loadAttempt = async (quiz: PublicQuiz, attemptId: string): Promise<View> => {
+    const res = await studyApi<AttemptResponse>(courseId, `/quizzes/${quiz.id}/attempts/${attemptId}`);
+    return res.status === "submitted"
+      ? { kind: "result", quiz, result: res.attempt }
+      : { kind: "play", quiz, attempt: res.attempt, answers: res.answers };
+  };
+
+  const openAttempt = (quiz: PublicQuiz, attempt: AttemptSummary) => run(() => loadAttempt(quiz, attempt.id));
+
+  /** Reprise directe depuis la liste : quiz + brouillon de la tentative en cours. */
+  const resume = (quizId: string, attemptId: string) =>
     run(async () => {
-      if (!attempt.submittedAt) return { kind: "play", quiz, attempt };
-      const res = await studyApi<AttemptResponse>(courseId, `/quizzes/${quiz.id}/attempts/${attempt.id}`);
-      return res.status === "submitted" ? { kind: "result", quiz, result: res.attempt } : { kind: "play", quiz, attempt };
+      const { quiz } = await studyApi<QuizDetailResponse>(courseId, `/quizzes/${quizId}`);
+      return loadAttempt(quiz, attemptId);
     });
 
   async function remove(id: string) {
@@ -120,6 +130,7 @@ export function QuizWorkspace({
         courseId={courseId}
         quiz={view.quiz}
         attempt={view.attempt}
+        initialAnswers={view.answers}
         onGraded={(result) => {
           setView({ kind: "result", quiz: view.quiz, result });
           history.reload();
@@ -225,11 +236,15 @@ export function QuizWorkspace({
         ) : (
           <ul className="space-y-2">
             {quizzes.map((q, i) => (
-              <li key={q.id} className="rise-in" style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
+              <li
+                key={q.id}
+                className="rise-in flex items-stretch gap-2"
+                style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}
+              >
                 <button
                   type="button"
                   onClick={() => openQuiz(q.id)}
-                  className="flex w-full items-center gap-4 rounded-xl border border-line bg-surface px-4 py-3 text-left transition hover:border-line-strong hover:shadow-card"
+                  className="flex min-w-0 flex-1 items-center gap-4 rounded-xl border border-line bg-surface px-4 py-3 text-left transition hover:border-line-strong hover:shadow-card"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{q.title}</span>
@@ -247,6 +262,16 @@ export function QuizWorkspace({
                     )}
                   </span>
                 </button>
+                {q.inProgress && (
+                  <button
+                    type="button"
+                    onClick={() => resume(q.id, q.inProgress!.id)}
+                    className="btn btn-secondary shrink-0 self-center"
+                    title={`Commencée le ${formatDate(q.inProgress.startedAt)}`}
+                  >
+                    Reprendre
+                  </button>
+                )}
               </li>
             ))}
           </ul>

@@ -242,7 +242,7 @@ export async function createQuiz(
 // ------------------------------------------------------------------ Lecture
 
 export async function listQuizzes({ supabase, courseId }: Session): Promise<QuizSummary[]> {
-  const [{ data: quizzes, error }, { data: attempts }] = await Promise.all([
+  const [{ data: quizzes, error }, { data: attempts }, { data: open }] = await Promise.all([
     supabase
       .from("study_quizzes")
       .select("id, mode, title, question_count, time_limit_sec, created_at")
@@ -256,8 +256,18 @@ export async function listQuizzes({ supabase, courseId }: Session): Promise<Quiz
       .not("submitted_at", "is", null)
       .order("submitted_at", { ascending: true })
       .limit(2000),
+    // Tentatives en cours (pas encore corrigées), la plus récente en premier
+    supabase
+      .from("study_attempts")
+      .select(`quiz_id, ${SUMMARY_COLUMNS}`)
+      .eq("course_id", courseId)
+      .is("submitted_at", null)
+      .order("started_at", { ascending: false })
+      .limit(500),
   ]);
   if (error) dbError(error);
+  const inProgress = new Map<string, AttemptSummary>();
+  for (const a of open ?? []) if (!inProgress.has(a.quiz_id)) inProgress.set(a.quiz_id, toAttemptSummary(a));
   const stats = new Map<string, { count: number; best: number | null; last: number | null }>();
   for (const a of attempts ?? []) {
     const p = percentOf(a.score, a.max_score);
@@ -277,6 +287,7 @@ export async function listQuizzes({ supabase, courseId }: Session): Promise<Quiz
     attemptCount: stats.get(q.id)?.count ?? 0,
     bestPercent: stats.get(q.id)?.best ?? null,
     lastPercent: stats.get(q.id)?.last ?? null,
+    inProgress: inProgress.get(q.id) ?? null,
   }));
 }
 
@@ -354,7 +365,32 @@ export async function getAttempt(session: Session, quizId: string, attemptId: st
   const attempt = await loadAttempt(session, quizId, attemptId);
   return attempt.submitted_at
     ? { status: "submitted", attempt: toAttemptResult(attempt, await loadKey(session.userId, quizId)) }
-    : { status: "in_progress", attempt: toAttemptSummary(attempt) };
+    : { status: "in_progress", attempt: toAttemptSummary(attempt), answers: attempt.answers ?? {} };
+}
+
+/**
+ * Brouillon des réponses d'une tentative en cours (reprise sur un autre appareil ou après fermeture).
+ * Sans effet une fois les réponses envoyées (answered_at) : elles restent figées.
+ */
+export async function saveDraft(session: Session, quizId: string, attemptId: string, rawAnswers: Answers) {
+  const { userId } = session;
+  await enforceLimit(userId, "study:draft", { limit: 240, windowSec: 600 });
+  const quiz = await loadQuiz(session, quizId);
+  await loadAttempt(session, quizId, attemptId);
+  // Questions publiques : type et choix suffisent pour valider la forme des réponses
+  const answers: Record<string, AnswerValue> = {};
+  for (const q of quiz.questions as unknown as Question[]) {
+    const value = sanitizeAnswer(q, rawAnswers[q.id]);
+    if (value !== null) answers[q.id] = value;
+  }
+  const { error } = await trustedClient()
+    .from("study_attempts")
+    .update({ answers })
+    .eq("id", attemptId)
+    .eq("user_id", userId)
+    .is("answered_at", null)
+    .is("submitted_at", null);
+  if (error) dbError(error);
 }
 
 /**

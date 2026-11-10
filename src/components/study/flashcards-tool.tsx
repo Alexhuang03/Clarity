@@ -42,14 +42,13 @@ const RATINGS: { value: Rating; label: string; key: string; tone: string }[] = [
 export function FlashcardsTool({ courseId, scopeOptions }: { courseId: string; scopeOptions: ScopeOptions }) {
   const [view, setView] = useState<View>({ kind: "home" });
   const [error, setError] = useState<string | null>(null);
-  const decks = useStudyResource<{ decks: DeckSummary[] }>(courseId, "/decks");
+  // Un seul appel : dueCount de chaque paquet compte les cartes dues d'ici la fin de la journée
   const [dueToday] = useState(endOfToday);
-  const due = useStudyResource<DueCardsResponse>(courseId, `/cards/due?limit=1&before=${encodeURIComponent(dueToday)}`);
+  const decks = useStudyResource<{ decks: DeckSummary[] }>(courseId, `/decks?before=${encodeURIComponent(dueToday)}`);
 
   const home = () => {
     setView({ kind: "home" });
     decks.reload();
-    due.reload();
   };
 
   async function create(body: { count?: number; scope?: StudyScope; title?: string; empty?: boolean }) {
@@ -58,7 +57,6 @@ export function FlashcardsTool({ courseId, scopeOptions }: { courseId: string; s
     try {
       const res = await studyApi<DeckResponse>(courseId, "/decks", { method: "POST", body });
       decks.reload();
-      due.reload();
       setView({ kind: "deck", deckId: res.deck.id });
     } catch (e) {
       setError(errorMessage(e));
@@ -84,7 +82,7 @@ export function FlashcardsTool({ courseId, scopeOptions }: { courseId: string; s
     );
   }
 
-  const totalDue = due.data?.total ?? 0;
+  const totalDue = decks.data?.decks.reduce((sum, d) => sum + d.dueCount, 0) ?? 0;
   return (
     <>
       <ToolIntro
@@ -102,7 +100,7 @@ export function FlashcardsTool({ courseId, scopeOptions }: { courseId: string; s
         }
       >
         Chaque carte revient juste avant que tu l&apos;oublies (répétition espacée).{" "}
-        {due.data && (
+        {decks.data && (
           <strong className="font-medium text-foreground">
             {totalDue === 0
               ? "Rien à réviser aujourd'hui."
