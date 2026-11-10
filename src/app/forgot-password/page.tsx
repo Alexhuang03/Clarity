@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ResetOnLeave } from "@/components/auth/reset-on-leave";
 import { createClient } from "@/lib/supabase/client";
 import { authErrorMessage, isPasswordValid } from "@/lib/auth-errors";
 import {
@@ -21,6 +22,14 @@ import {
 type Step = "email" | "code" | "password";
 
 export default function ForgotPasswordPage() {
+  return (
+    <ResetOnLeave>
+      <ForgotPasswordFlow />
+    </ResetOnLeave>
+  );
+}
+
+function ForgotPasswordFlow() {
   const router = useRouter();
   const supabase = createClient();
   const [step, setStep] = useState<Step>("email");

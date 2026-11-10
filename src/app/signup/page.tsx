@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ResetOnLeave } from "@/components/auth/reset-on-leave";
 import { createClient } from "@/lib/supabase/client";
 import { authErrorMessage, isPasswordValid } from "@/lib/auth-errors";
 import { suggestEmail } from "@/lib/email-check";
@@ -23,6 +24,14 @@ import {
 } from "@/components/auth/ui";
 
 export default function SignupPage() {
+  return (
+    <ResetOnLeave>
+      <SignupFlow />
+    </ResetOnLeave>
+  );
+}
+
+function SignupFlow() {
   const router = useRouter();
   const supabase = createClient();
   const [step, setStep] = useState<"form" | "code">("form");
