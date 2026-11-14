@@ -30,6 +30,7 @@ export const zh: Dictionary = {
   footer: {
     riot: "信号图标、音效与表情 © Riot Games, Inc.，来自 lolPing 项目。Clarity 未获 Riot Games 认可，也不代表 Riot Games 的观点或意见。",
     legal: "法律声明 · 使用条款 · 隐私",
+    copyright: "版权",
   },
 
   auth: {
@@ -728,6 +729,7 @@ export const zh: Dictionary = {
       confidentialite: { label: "隐私（GDPR）", short: "隐私" },
       mentions: { label: "法律声明", short: "声明" },
       licence: { label: "许可协议", short: "许可" },
+      droits: { label: "版权", short: "版权" },
     },
     openNewTab: "在新标签页中打开",
     understood: "我知道了",
@@ -735,14 +737,14 @@ export const zh: Dictionary = {
   },
 
   landing: {
-    nav: { label: "主导航", features: "功能", teacher: "老师模式", openSource: "开源", login: "登录" },
+    nav: { label: "主导航", features: "功能", teacher: "老师模式", project: "关于项目", login: "登录" },
     eyebrow: "AI 辅助复习",
     title: "真正理解课程，而不只是重读。",
     intro:
       "Clarity 会阅读你的课件和练习，或者根据一个主题撰写课程。它按部分给出清晰的总结，引用来源回答你的问题，再陪你反复练习，直到真正掌握。",
     ctaStart: "免费开始",
     ctaLogin: "登录",
-    heroNote: "免费 · 开源 · Français, English, 中文",
+    heroNote: "免费 · Français, English, 中文",
     previewLabel: "Clarity 预览：附有来源的课程总结、测验和对话",
     mock: {
       course: "概率论 · 第三章",
@@ -804,10 +806,10 @@ export const zh: Dictionary = {
       steps: ["已找到来源", "四章大纲", "正在撰写第三章"],
       sources: "来源",
     },
-    openEyebrow: "开源",
-    openTitle: "一个开放的项目",
-    openText: "Clarity 的代码是公开的：你可以阅读它、提出改进建议或报告问题。",
-    github: "在 GitHub 上查看项目",
+    projectEyebrow: "个人项目",
+    projectTitle: "由 Alex Huang 设计与开发",
+    projectText: "Clarity 是一个个人项目，从构思、设计到开发，全部由 Alex Huang 独立完成。",
+    github: "查看我的 GitHub 主页",
     authEyebrow: "开始使用",
     authTitle: "准备好换一种方式复习了吗？",
     authText: "一分钟创建账号，或者重新登录。",

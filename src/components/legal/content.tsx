@@ -1,4 +1,4 @@
-// Textes juridiques de Clarity (CGU, confidentialité, mentions légales, licences).
+// Textes juridiques de Clarity (CGU, confidentialité, mentions légales, licences, droits d'auteur).
 // Éditeur non professionnel : il peut ne pas publier son adresse, à condition d'avoir communiqué
 // son identité à l'hébergeur (LCEN, art. 6-III-2). Le nom de l'hébergeur reste obligatoire.
 
@@ -22,13 +22,14 @@ function Contact() {
   );
 }
 
-export type LegalTab = "cgu" | "confidentialite" | "mentions" | "licence";
+export type LegalTab = "cgu" | "confidentialite" | "mentions" | "licence" | "droits";
 
 export const LEGAL_TABS: { id: LegalTab; label: string; short: string }[] = [
   { id: "cgu", label: "Conditions d'utilisation", short: "Conditions" },
   { id: "confidentialite", label: "Confidentialité (RGPD)", short: "Confidentialité" },
   { id: "mentions", label: "Mentions légales", short: "Mentions" },
   { id: "licence", label: "Licences", short: "Licences" },
+  { id: "droits", label: "Droits d'auteur", short: "Droits" },
 ];
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -226,7 +227,7 @@ function Mentions() {
       <Section title="Propriété intellectuelle">
         <p>
           La structure, le design et le code de Clarity sont protégés. Les contenus importés par les utilisateurs
-          restent leur propriété.
+          restent leur propriété. Le détail figure dans l&apos;onglet « Droits d&apos;auteur ».
         </p>
       </Section>
       <Section title="Signaler un contenu">
@@ -244,8 +245,8 @@ function Licences() {
     <>
       <Section title="Clarity">
         <p>
-          Le code de Clarity est la propriété de son éditeur. Toute reproduction ou réutilisation sans autorisation
-          est interdite.
+          Le code de Clarity est la propriété de son éditeur, tous droits réservés (voir l&apos;onglet « Droits
+          d&apos;auteur »). Toute reproduction ou réutilisation sans autorisation est interdite.
         </p>
       </Section>
       <Section title="Éléments de Riot Games">
@@ -256,7 +257,7 @@ function Licences() {
           marques ou des marques déposées de Riot Games, Inc.
         </p>
       </Section>
-      <Section title="Composants open source">
+      <Section title="Bibliothèques et composants tiers">
         <ul>
           <li><strong>React Bits</strong> (David Haz) : animations et effets visuels, licence MIT + Commons Clause.</li>
           <li><strong>Next.js</strong>, <strong>React</strong>, <strong>Tailwind CSS</strong>, <strong>Motion</strong> : licence MIT.</li>
@@ -272,6 +273,64 @@ function Licences() {
   );
 }
 
+function Copyright() {
+  return (
+    <>
+      <Section title="1. Titulaire des droits">
+        <p>
+          <strong>© 2026 {LEGAL_INFO.publisher}. Tous droits réservés.</strong> Clarity est un projet personnel conçu
+          et développé par {LEGAL_INFO.publisher}.
+        </p>
+        <p>
+          Sont protégés au titre du droit d&apos;auteur : le code source, le design et l&apos;interface, les textes du
+          site, le logo, ainsi que le nom « Clarity » tel qu&apos;il est utilisé pour ce site (ce nom n&apos;est pas
+          présenté comme une marque déposée).
+        </p>
+      </Section>
+      <Section title="2. Utilisations interdites">
+        <p>
+          Toute reproduction, représentation, modification, adaptation, diffusion ou réutilisation, totale ou
+          partielle, de ces éléments, par quelque procédé que ce soit, sans l&apos;autorisation écrite et préalable de
+          {" "}{LEGAL_INFO.publisher}, est interdite et constitue une contrefaçon sanctionnée par les articles L.111-1,
+          L.122-4 et L.335-2 du Code de la propriété intellectuelle.
+        </p>
+      </Section>
+      <Section title="3. Tes contenus">
+        <p>
+          Les contenus que tu importes ou crées (cours, documents, annotations, notes, réponses aux quiz)
+          <strong> restent ta propriété</strong>. Clarity n&apos;en revendique aucun droit et ne les traite que pour te
+          fournir le service, dans les conditions décrites dans les Conditions d&apos;utilisation et la Politique de
+          confidentialité.
+        </p>
+      </Section>
+      <Section title="4. Contenus générés par l'IA">
+        <p>
+          Les contenus générés par l&apos;intelligence artificielle (résumés, réponses, quiz, flashcards, fiches, cours
+          rédigés en mode professeur) te sont fournis pour ton <strong>usage personnel d&apos;étude</strong>.
+        </p>
+        <p>
+          Les extraits et informations provenant de sources tierces restent soumis à leurs propres licences : par
+          exemple, les contenus de Wikipédia sont diffusés sous licence Creative Commons Attribution - Partage dans
+          les mêmes conditions (CC BY-SA). Les sources utilisées sont citées dans chaque cours concerné.
+        </p>
+      </Section>
+      <Section title="5. Éléments tiers">
+        <p>
+          Les éléments appartenant à des tiers restent la propriété de leurs auteurs : icônes, sons et émotes de
+          Riot Games (via le projet lolPing, licence MIT), effets visuels React Bits (licence MIT + Commons Clause),
+          bibliothèques et polices open source. Le détail figure dans l&apos;onglet « Licences ».
+        </p>
+      </Section>
+      <Section title="6. Demande d'autorisation">
+        <p>
+          Pour toute demande d&apos;autorisation ou question relative aux droits, contacte l&apos;éditeur via GitHub :{" "}
+          <Contact />.
+        </p>
+      </Section>
+    </>
+  );
+}
+
 export function LegalContent({ tab }: { tab: LegalTab }) {
   return (
     <div className="space-y-6">
@@ -279,6 +338,7 @@ export function LegalContent({ tab }: { tab: LegalTab }) {
       {tab === "confidentialite" && <Privacy />}
       {tab === "mentions" && <Mentions />}
       {tab === "licence" && <Licences />}
+      {tab === "droits" && <Copyright />}
       <p className="border-t border-line pt-4 text-xs text-muted">Dernière mise à jour : {LEGAL_UPDATED_AT}</p>
     </div>
   );

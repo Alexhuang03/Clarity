@@ -31,6 +31,7 @@ export const en: Dictionary = {
   footer: {
     riot: "Ping icons, sounds and emotes © Riot Games, Inc., via the lolPing project. Clarity isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games.",
     legal: "Legal notice · Terms · Privacy",
+    copyright: "Copyright",
   },
 
   auth: {
@@ -742,6 +743,7 @@ export const en: Dictionary = {
       confidentialite: { label: "Privacy (GDPR)", short: "Privacy" },
       mentions: { label: "Legal notice", short: "Legal notice" },
       licence: { label: "Licences", short: "Licences" },
+      droits: { label: "Copyright", short: "Copyright" },
     },
     openNewTab: "Open in a new tab",
     understood: "Got it",
@@ -749,14 +751,14 @@ export const en: Dictionary = {
   },
 
   landing: {
-    nav: { label: "Main navigation", features: "Features", teacher: "Teacher mode", openSource: "Open source", login: "Sign in" },
+    nav: { label: "Main navigation", features: "Features", teacher: "Teacher mode", project: "The project", login: "Sign in" },
     eyebrow: "AI-assisted revision",
     title: "Understand your courses, don't just reread them.",
     intro:
       "Clarity reads your lectures and exercises, or writes the course from a simple topic. It gives you a clear summary part by part, answers your questions with cited sources, then trains you until it sticks.",
     ctaStart: "Get started for free",
     ctaLogin: "Sign in",
-    heroNote: "Free · Open source · Français, English, 中文",
+    heroNote: "Free · Français, English, 中文",
     previewLabel: "Preview of Clarity: a course summary with its sources, a quiz and a conversation",
     mock: {
       course: "Probability · Chapter 3",
@@ -819,10 +821,10 @@ export const en: Dictionary = {
       steps: ["Sources found", "4-chapter outline", "Writing chapter 3"],
       sources: "Sources",
     },
-    openEyebrow: "Open source",
-    openTitle: "An open project",
-    openText: "Clarity's code is public: you can read it, suggest an improvement or report a problem.",
-    github: "View the project on GitHub",
+    projectEyebrow: "Personal project",
+    projectTitle: "Designed and built by Alex Huang",
+    projectText: "Clarity is a personal project, imagined, designed and built end to end by Alex Huang.",
+    github: "View my GitHub profile",
     authEyebrow: "Get started",
     authTitle: "Ready to revise differently?",
     authText: "Create your account in a minute, or sign back in.",

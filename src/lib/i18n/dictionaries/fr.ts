@@ -32,6 +32,7 @@ export const fr = {
   footer: {
     riot: "Icônes de pings, sons et émotes © Riot Games, Inc., via le projet lolPing. Clarity n'est pas approuvé par Riot Games et ne reflète pas les opinions de Riot Games.",
     legal: "Mentions légales · Conditions · Confidentialité",
+    copyright: "Droits d'auteur",
   },
 
   auth: {
@@ -775,6 +776,7 @@ export const fr = {
       confidentialite: { label: "Confidentialité (RGPD)", short: "Confidentialité" },
       mentions: { label: "Mentions légales", short: "Mentions" },
       licence: { label: "Licences", short: "Licences" },
+      droits: { label: "Droits d'auteur", short: "Droits" },
     },
     openNewTab: "Ouvrir dans un nouvel onglet",
     understood: "J'ai compris",
@@ -785,14 +787,14 @@ export const fr = {
   /** Présentation de Clarity sur la page de connexion */
   // Page publique de présentation (/login et /signup), connexion et inscription en bas de page
   landing: {
-    nav: { label: "Navigation principale", features: "Fonctionnalités", teacher: "Mode professeur", openSource: "Open source", login: "Se connecter" },
+    nav: { label: "Navigation principale", features: "Fonctionnalités", teacher: "Mode professeur", project: "Le projet", login: "Se connecter" },
     eyebrow: "Révisions assistées par IA",
     title: "Comprendre ses cours, pas seulement les relire.",
     intro:
       "Clarity lit tes cours et tes exercices, ou rédige le cours à partir d'un simple sujet. Il t'en fait un résumé clair partie par partie, répond à tes questions en citant ses sources, puis t'entraîne jusqu'à ce que ce soit acquis.",
     ctaStart: "Commencer gratuitement",
     ctaLogin: "Se connecter",
-    heroNote: "Gratuit · Open source · Français, English, 中文",
+    heroNote: "Gratuit · Français, English, 中文",
     previewLabel: "Aperçu de Clarity : un résumé de cours avec ses sources, un quiz et une conversation",
     mock: {
       course: "Probabilités · Chapitre 3",
@@ -855,10 +857,10 @@ export const fr = {
       steps: ["Sources trouvées", "Plan en 4 chapitres", "Rédaction du chapitre 3"],
       sources: "Sources",
     },
-    openEyebrow: "Open source",
-    openTitle: "Un projet ouvert",
-    openText: "Le code de Clarity est public : tu peux le lire, proposer une amélioration ou signaler un problème.",
-    github: "Voir le projet sur GitHub",
+    projectEyebrow: "Projet personnel",
+    projectTitle: "Conçu et développé par Alex Huang",
+    projectText: "Clarity est un projet personnel, imaginé, conçu et développé de bout en bout par Alex Huang.",
+    github: "Voir mon profil GitHub",
     authEyebrow: "Commencer",
     authTitle: "Prêt à réviser autrement ?",
     authText: "Crée ton compte en une minute, ou reconnecte-toi.",

@@ -253,7 +253,7 @@ function SectionHeading({ id, eyebrow, title, intro }: { id: string; eyebrow: st
 
 /**
  * Page publique de Clarity (/login et /signup) : présentation qui défile (accroche, fonctionnement,
- * fonctionnalités, mode professeur, open source), puis la carte Connexion / Inscription tout en bas.
+ * fonctionnalités, mode professeur, projet personnel), puis la carte Connexion / Inscription tout en bas.
  * Lit ?next= : doit être rendue sous <Suspense>.
  */
 export function AuthLanding({ initialTab }: { initialTab: AuthTab }) {
@@ -313,7 +313,7 @@ export function AuthLanding({ initialTab }: { initialTab: AuthTab }) {
             {[
               ["#fonctionnalites", l.nav.features],
               ["#professeur", l.nav.teacher],
-              ["#open-source", l.nav.openSource],
+              ["#projet", l.nav.project],
             ].map(([href, label]) => (
               <a key={href} href={href} className="rounded-lg px-3 py-1.5 transition hover:bg-surface-2 hover:text-foreground">
                 {label}
@@ -435,18 +435,21 @@ export function AuthLanding({ initialTab }: { initialTab: AuthTab }) {
           </div>
         </section>
 
-        {/* Open source */}
-        <section id="open-source" aria-labelledby="open-title" className="scroll-mt-16 px-4 pb-20 sm:px-6 lg:pb-28">
+        {/* Projet personnel */}
+        <section id="projet" aria-labelledby="project-title" className="scroll-mt-16 px-4 pb-20 sm:px-6 lg:pb-28">
           <Reveal className="mx-auto max-w-3xl">
             <Spotlight className="px-6 py-10 text-center sm:px-12">
-              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-foreground text-background">
-                <GitHubIcon className="h-6 w-6" />
+              <span
+                aria-hidden
+                className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-foreground font-display text-xl italic text-background"
+              >
+                AH
               </span>
-              <p className="eyebrow mt-5">{l.openEyebrow}</p>
-              <h2 id="open-title" className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-                {l.openTitle}
+              <p className="eyebrow mt-5">{l.projectEyebrow}</p>
+              <h2 id="project-title" className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+                {l.projectTitle}
               </h2>
-              <p className="mx-auto mt-3 max-w-lg leading-relaxed text-muted">{l.openText}</p>
+              <p className="mx-auto mt-3 max-w-lg leading-relaxed text-muted">{l.projectText}</p>
               <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className="btn btn-secondary mt-6 shadow-card">
                 <GitHubIcon />
                 {l.github}

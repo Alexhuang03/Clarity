@@ -8,7 +8,9 @@ const ICONS: Record<LegalTab, React.ReactNode> = {
   cgu: <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h4" />,
   confidentialite: <path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6zM9.5 12l1.8 1.8L15 10" />,
   mentions: <path d="M12 4v16M8 20h8M5 8h14M5 8l-2.5 6a2.5 2.5 0 0 0 5 0zM19 8l-2.5 6a2.5 2.5 0 0 0 5 0z" />,
-  licence: <><circle cx="12" cy="12" r="9" /><path d="M14.5 9.5a3.5 3.5 0 1 0 0 5" /></>,
+  licence: <path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5" />,
+  // Droits d'auteur : le symbole ©
+  droits: <><circle cx="12" cy="12" r="9" /><path d="M14.5 9.5a3.5 3.5 0 1 0 0 5" /></>,
 };
 
 function Icon({ tab, className = "" }: { tab: LegalTab; className?: string }) {
@@ -43,7 +45,7 @@ export function LegalTabs({ tab, onTab }: { tab: LegalTab; onTab: (t: LegalTab) 
     document.getElementById(`legal-tab-${t}`)?.focus();
   }
   return (
-    <div role="tablist" aria-label={dict.legal.tablist} onKeyDown={onKeyDown} className="grid grid-cols-2 border-b border-line px-2 sm:grid-cols-4 sm:px-4">
+    <div role="tablist" aria-label={dict.legal.tablist} onKeyDown={onKeyDown} className="grid grid-cols-3 border-b border-line px-2 sm:grid-cols-5 sm:px-3">
       {LEGAL_TABS.map((t) => {
         const active = t.id === tab;
         return (
@@ -61,7 +63,8 @@ export function LegalTabs({ tab, onTab }: { tab: LegalTab; onTab: (t: LegalTab) 
               active ? "font-medium text-accent-text" : "text-muted hover:text-foreground"
             }`}
           >
-            <Icon tab={t.id} />
+            {/* Petit écran : libellés seuls (3 colonnes), pour qu'ils restent entiers et lisibles */}
+            <Icon tab={t.id} className="max-sm:hidden" />
             <span className="truncate">{dict.legal.tabs[t.id].short}</span>
             {active && <span aria-hidden className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-accent" />}
           </button>

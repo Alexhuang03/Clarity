@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
+import { LEGAL_INFO } from "@/components/legal/content";
 import { I18nProvider } from "@/lib/i18n/client";
 import { LOCALE_COOKIE } from "@/lib/i18n/config";
 import { getT } from "@/lib/i18n/server";
@@ -74,6 +75,12 @@ async function LocaleRoot({ children }: { children: React.ReactNode }) {
         <Link href="/legal" className="underline-offset-4 hover:text-foreground hover:underline">
           {t.footer.legal}
         </Link>
+        {" · "}
+        {/* Lien simple : l'onglet de /legal suit l'ancre (événement hashchange), y compris depuis /legal */}
+        <a href="/legal#droits" className="underline-offset-4 hover:text-foreground hover:underline">
+          {t.footer.copyright}
+        </a>
+        <br />© 2026 {LEGAL_INFO.publisher}
       </footer>
     </I18nProvider>
   );
