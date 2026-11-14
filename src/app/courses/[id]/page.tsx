@@ -39,7 +39,7 @@ async function CourseContent({ params }: { params: Promise<{ id: string }> }) {
   ] = await Promise.all([
       supabase
         .from("courses")
-        .select("id, title, analyzed_at, subject:subjects(name, color)")
+        .select("id, title, analyzed_at, origin, subject:subjects(name, color)")
         .eq("id", id)
         .maybeSingle(),
       supabase

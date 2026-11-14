@@ -35,4 +35,6 @@ export type CourseRow = {
   title: string;
   analyzed_at: string | null;
   subject: { name: string; color: string } | null;
+  /** upload : fichiers de l'utilisateur ; web : cours rédigé par le mode professeur */
+  origin?: "upload" | "web";
 };

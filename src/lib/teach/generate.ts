@@ -110,7 +110,7 @@ export async function generateTeachCourse(courseId: string) {
   const started = Date.now();
   const { data: web } = await admin
     .from("course_web")
-    .select("course_id, user_id, document_id, topic, level, goal, locale")
+    .select("course_id, user_id, document_id, topic, level, goal, locale, created_at")
     .eq("course_id", courseId)
     .maybeSingle();
   if (!web?.document_id) return console.error("[professeur] cours introuvable", courseId);
@@ -263,7 +263,15 @@ export async function generateTeachCourse(courseId: string) {
     );
 
     // ---------- 5. Enregistrement ----------
-    const title = plan.title || req.topic.slice(0, COURSE_TITLE_MAX);
+    // Cours créé vide par l'utilisateur (« Nouveau cours », titre obligatoire) : son titre et sa matière sont gardés.
+    // Cours créé par la route elle-même (titre provisoire = le sujet) : titre et matière du plan.
+    const { data: current } = await admin.from("courses").select("title, subject_id, created_at").eq("id", courseId).maybeSingle();
+    if (!current) return console.info("[professeur] cours supprimé pendant la génération", courseId);
+    const createdByTeach =
+      Math.abs(new Date(current.created_at as string).getTime() - new Date(web.created_at as string).getTime()) < 5_000 &&
+      current.title === req.topic.slice(0, COURSE_TITLE_MAX);
+    const userTitle = typeof current.title === "string" ? current.title.trim() : "";
+    const title = !createdByTeach && userTitle ? userTitle : plan.title || req.topic.slice(0, COURSE_TITLE_MAX);
     const markdown = [
       `# ${title}`,
       ...plan.chapters.map((c, i) => `## ${i + 1}. ${c.title}\n\n${cited[i].replace(/^(#{1,5}) /gm, "#$1 ")}`),
@@ -346,7 +354,7 @@ export async function generateTeachCourse(courseId: string) {
       })
       .eq("course_id", courseId);
 
-    const subjectId = await resolveSubject(admin, userId, plan.subject).catch(() => null);
+    const subjectId = current.subject_id ? null : await resolveSubject(admin, userId, plan.subject).catch(() => null);
     await admin
       .from("courses")
       .update({ title, ...(subjectId ? { subject_id: subjectId } : {}), analyzed_at: new Date().toISOString() })

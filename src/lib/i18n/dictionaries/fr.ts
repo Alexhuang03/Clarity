@@ -115,7 +115,7 @@ export const fr = {
   dashboard: {
     eyebrow: "Tableau de bord",
     title: "Mes cours",
-    introEmpty: "Crée ton premier cours et ajoute tes fichiers : l'IA en fera un résumé clair, pas à pas.",
+    introEmpty: "Crée ton premier cours, puis ajoute tes fichiers ou tape un sujet dans la conversation : l'IA en fera un cours clair, pas à pas.",
     intro: "Reprends là où tu t'étais arrêté, ou ajoute un nouveau cours.",
     statCourses: (n: number) => s(n, "cours", "cours"),
     statSubjects: (n: number) => s(n, "matière", "matières"),
@@ -142,35 +142,45 @@ export const fr = {
     createCourse: "Créer le cours",
   },
 
-  // Mode professeur : un cours rédigé par l'IA à partir d'un sujet, sourcé sur le web
+  // Mode professeur : dans un cours vide, la barre de conversation fait rédiger le cours par l'IA à partir
+  // d'un sujet, avec des sources du web
   teach: {
-    eyebrow: "Mode professeur",
-    title: "Apprendre un sujet sans cours",
-    intro:
-      "Pas de document ? Dis ce que tu veux apprendre : Clarity rédige un cours complet, appuyé sur des sources du web, et le range avec tes autres cours.",
-    topicLabel: "Que veux-tu apprendre ?",
-    topicPlaceholder: "Ex. La photosynthèse, les intégrales…",
-    options: "Options",
-    optionsHint: "niveau, objectif",
+    placeholder: "Que veux-tu apprendre ? Ex. le théorème de Thalès, niveau 3e",
+    send: "Générer le cours",
+    sendTitle: "Clarity rédige un cours complet sur ce sujet, avec des sources du web",
+    context: "Mode professeur · Clarity rédige le cours à partir de sources du web",
+    emptyTitle: "Ce cours est vide",
+    emptyIntro: "Deux façons de le remplir :",
+    emptyUploadTitle: "Importe tes documents",
+    emptyUploadText: "Cours, exercices, PDF, Word, PowerPoint, photos ou lien : glisse-les sur la page ou utilise le bouton + de la barre.",
+    emptyTeachTitle: "Ou tape un sujet dans la barre",
+    emptyTeachText:
+      "Clarity rédige un cours complet, chapitre par chapitre, en citant des sources du web. Tu peux préciser ton niveau et ton objectif.",
+    examplesLabel: "Exemples :",
+    examples: ["Le théorème de Thalès", "La photosynthèse", "La guerre froide", "Les intégrales"],
+    options: "Niveau et objectif",
     levelLabel: "Niveau",
     levels: ["Collège", "Lycée", "Licence", "Master"],
     levelOther: "Autre",
     levelOtherLabel: "Ton niveau",
     levelPlaceholder: "Ex. Prépa, BTS, grand débutant…",
     goalLabel: "Objectif (facultatif)",
-    goalPlaceholder: "Ex. Préparer un partiel, comprendre les bases, préparer un exposé…",
-    submit: "Générer le cours",
-    submitting: "Préparation du cours…",
-    examplesLabel: "Exemples :",
-    examples: ["La photosynthèse", "Les intégrales", "La guerre froide", "Les réseaux de neurones", "L'offre et la demande"],
+    goalPlaceholder: "Ex. Préparer un partiel, comprendre les bases…",
     topicTooShort: (min: number) => `Décris le sujet en ${min} caractères au moins.`,
     errorInvalid: "Ce sujet n'a pas pu être accepté. Reformule-le et réessaie.",
     errorAuth: "Ta session a expiré. Reconnecte-toi puis réessaie.",
+    errorNotFound: "Ce cours est introuvable : il a peut-être été supprimé.",
+    errorNotEmpty: "Un document a été ajouté à ce cours entre-temps : le mode professeur ne fonctionne que dans un cours vide.",
+    errorBusy: "Un cours est déjà en cours de rédaction. Attends qu'il soit prêt avant d'en lancer un autre.",
     errorQuota: "Tu as atteint la limite de cours générés pour le moment. Réessaie un peu plus tard.",
-    errorServer: "La génération n'a pas pu démarrer. Réessaie dans un instant.",
+    errorUnavailable: "Trop de cours en préparation en ce moment. Réessaie dans quelques minutes.",
+    errorServer: "La rédaction n'a pas pu démarrer. Réessaie dans un instant.",
     errorNetwork: "Connexion impossible. Vérifie ta connexion internet et réessaie.",
+    generatingTitle: (progress: number) => `Clarity rédige ton cours… ${progress} %`,
+    generatingHint:
+      "Recherche de sources, plan, puis rédaction chapitre par chapitre. Cela prend quelques minutes : tu peux quitter la page et revenir plus tard.",
     disclaimer: "Cours rédigé par l'IA à partir de sources publiques : vérifie les informations importantes.",
-    // Page du cours
+    // Cours rédigé : origine et sources
     badgeWeb: "Cours généré par l'IA à partir du web",
     badgeWikipedia: "Cours généré par l'IA à partir de Wikipédia",
     badgeNone: "Cours généré par l'IA",
@@ -777,12 +787,12 @@ export const fr = {
     eyebrow: "Révisions assistées par IA",
     title: "Comprendre ses cours, pas seulement les relire.",
     intro:
-      "Clarity lit tes cours et tes exercices, t'en fait un résumé clair partie par partie, répond à tes questions en citant ses sources, puis t'entraîne jusqu'à ce que ce soit acquis.",
+      "Clarity lit tes cours et tes exercices (ou rédige le cours à partir d'un simple sujet), t'en fait un résumé clair partie par partie, répond à tes questions en citant ses sources, puis t'entraîne jusqu'à ce que ce soit acquis.",
     howTitle: "Comment ça marche",
     steps: [
       {
         title: "Ajoute tes cours",
-        text: "PDF, Word, PowerPoint, photos, Markdown, un lien… ou simplement un sujet : Clarity rédige alors le cours pour toi.",
+        text: "PDF, Word, PowerPoint, photos, Markdown ou un lien. Pas de document ? Crée un cours, puis tape un sujet dans la conversation.",
       },
       {
         title: "Comprends pas à pas",
@@ -796,7 +806,7 @@ export const fr = {
     featuresTitle: "Tout ce qu'il faut pour réviser",
     features: [
       { title: "Résumés sourcés", text: "Chaque partie résumée, avec des pastilles qui renvoient au passage exact du document." },
-      { title: "Mode professeur", text: "Pas de document ? Tape un sujet : l'IA rédige un cours complet, sourcé sur le web." },
+      { title: "Mode professeur", text: "Pas de document ? Crée un cours, puis tape un sujet dans la conversation : l'IA rédige le cours, sourcé sur le web." },
       { title: "Discussion sur ton cours", text: "Pose tes questions ; l'IA répond à partir de tes documents et montre sa réflexion." },
       { title: "Annotations façon pings", text: "Surligne, questionne, signale une erreur : roue de pings et d'émotes inspirée de League of Legends." },
       { title: "Quiz et examens blancs", text: "QCM, vrai/faux, réponses rédigées corrigées selon un barème, chrono et remise automatique." },

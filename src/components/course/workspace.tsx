@@ -19,6 +19,8 @@ import { ThinkingPanel } from "./thinking-panel";
 import { useT } from "@/lib/i18n/client";
 import type { CourseWebSources } from "@/lib/teach/types";
 import { WebSourcesContext, WebSourcesNotice, WebSourcesSection } from "./web-sources";
+import { TeachEmptyState, TeachInput } from "./teach-input";
+import { Generating } from "@/components/study/ui";
 
 type Streaming = { kind: "summary" | "chat"; partId?: string; content: string; thinking: string } | null;
 
@@ -383,28 +385,61 @@ export function Workspace({
     if (analyzedAt) refreshParts();
   }, [readyKey, analyzedAt, refreshParts]);
 
+  const reloadDocuments = useCallback(async () => {
+    const { data } = await supabase
+      .from("documents")
+      .select("id, filename, kind, mime_type, status, progress, page_count, error, source_url, created_at")
+      .eq("course_id", course.id)
+      .order("created_at");
+    if (data) setDocuments(data as DocumentRow[]);
+    return data?.length ?? 0;
+  }, [course.id, supabase]);
+
   // Suivi du traitement des documents en arrière-plan
   useEffect(() => {
     if (!processing) return;
-    const timer = setInterval(async () => {
-      const { data } = await supabase
-        .from("documents")
-        .select("id, filename, kind, mime_type, status, progress, page_count, error, source_url, created_at")
-        .eq("course_id", course.id)
-        .order("created_at");
-      if (data) setDocuments(data as DocumentRow[]);
-    }, 2500);
+    const timer = setInterval(reloadDocuments, 2500);
     return () => clearInterval(timer);
-  }, [processing, course.id, supabase]);
+  }, [processing, reloadDocuments]);
 
-  // Fin du traitement : les sources web d'un cours du mode professeur (lues par le serveur) peuvent
-  // n'exister qu'à ce moment-là. On recharge les données serveur, sans toucher à l'état de la page.
+  // Mode professeur : cours rédigé par l'IA (lancé ici, ou déjà en cours au chargement de la page)
+  const [teaching, setTeaching] = useState(false);
+  const isWeb = course.origin === "web" || teaching;
   const router = useRouter();
+
+  async function startedTeaching() {
+    setError(null);
+    setTeaching(true);
+    // Le document du cours existe dès la réponse : sa progression s'affiche comme pour un fichier importé
+    // (quelques essais : il peut apparaître juste après la réponse)
+    for (let i = 0; i < 5 && (await reloadDocuments()) === 0; i++) await new Promise((r) => setTimeout(r, 1000));
+    router.refresh();
+  }
+
+  // Fin de la rédaction : chapitres, résumés et date d'analyse ont été écrits par le serveur. On les relit,
+  // puis on recharge les données serveur (titre définitif, sources web) sans toucher au reste de la page.
   const wasProcessing = useRef(processing);
   useEffect(() => {
-    if (wasProcessing.current && !processing && !webSources) router.refresh();
+    if (wasProcessing.current && !processing && isWeb) {
+      void (async () => {
+        const [{ data: newParts }, { data: newMessages }, { data: row }] = await Promise.all([
+          supabase.from("course_parts").select("id, ordinal, title").eq("course_id", course.id).order("ordinal"),
+          supabase
+            .from("messages")
+            .select("id, role, kind, part_id, content, sources, thinking, thinking_ms, created_at")
+            .eq("course_id", course.id)
+            .order("created_at"),
+          supabase.from("courses").select("analyzed_at").eq("id", course.id).maybeSingle(),
+        ]);
+        if (newParts) setParts(newParts as PartRow[]);
+        if (newMessages) setMessages(newMessages as MessageRow[]);
+        if (row) setAnalyzedAt(row.analyzed_at);
+        router.refresh();
+      })();
+    }
     wasProcessing.current = processing;
-  }, [processing, webSources, router]);
+  }, [processing, isWeb, course.id, supabase, router]);
+  const teachDocument = isWeb ? documents.find((d) => d.status === "uploaded" || d.status === "parsing") : undefined;
 
   useEffect(() => {
     if (streaming) bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -510,15 +545,12 @@ export function Workspace({
         <WebSourcesContext value={webSources?.sources ?? null}>
         <div className="flex-1 space-y-10 py-8">
           {webSources && <WebSourcesNotice data={webSources} />}
-          {documents.length === 0 && (
-            <div className="mx-auto max-w-md pt-10 text-center">
-              <p className="text-lg font-medium">{t.course.emptyTitle}</p>
-              <p className="mt-2 text-sm opacity-70">
-                {t.course.emptyBefore}{" "}
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-current text-xs leading-none">+</span>{" "}
-                {t.course.emptyAfter}
-              </p>
-            </div>
+          {/* Cours vide : importer des documents, ou taper un sujet (mode professeur) */}
+          {documents.length === 0 && <TeachEmptyState />}
+
+          {/* Mode professeur : rédaction en cours, suivie par la progression du document du cours */}
+          {teachDocument && (
+            <Generating label={t.teach.generatingTitle(teachDocument.progress ?? 0)} hint={t.teach.generatingHint} />
           )}
 
           {ready.length > 0 && !analyzedAt && !processing && (
@@ -536,7 +568,7 @@ export function Workspace({
             </div>
           )}
 
-          {processing && !analyzedAt && (
+          {processing && !analyzedAt && !teachDocument && (
             <p className="text-center text-sm opacity-70">
               {t.course.reading}
             </p>
@@ -607,6 +639,22 @@ export function Workspace({
         </div>
         </WebSourcesContext>
 
+        {documents.length === 0 ? (
+          // Cours vide : la barre devient le mode professeur (le bouton + permet toujours d'importer)
+          <TeachInput
+            courseId={course.id}
+            onStarted={startedTeaching}
+            onStale={(message) => {
+              setError(message);
+              void reloadDocuments();
+            }}
+            onFiles={upload}
+            onLink={addFromLink}
+            uploads={uploads}
+            documents={documents}
+            onDismissUpload={dismiss}
+          />
+        ) : (
         <ChatInput
           key={draft.key}
           initialValue={draft.text}
@@ -622,6 +670,7 @@ export function Workspace({
           documents={documents}
           onDismissUpload={dismiss}
         />
+        )}
       </CourseColumns>
     </>
   );
