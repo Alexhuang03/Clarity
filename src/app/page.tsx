@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 import { signOut } from "./actions";
 import { CourseCard } from "./course-card";
 import { NewCourseForm } from "./new-course-form";
+import { TeachForm } from "./teach-form";
 
 export default function Home() {
   return (
@@ -109,6 +110,8 @@ async function Courses() {
           </dl>
         )}
       </div>
+      {/* Mode professeur : un cours rédigé à partir d'un simple sujet, à côté de l'import de fichiers */}
+      <TeachForm />
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {courses?.map((course, i) => {
           const subject = course.subject as unknown as { name: string; color: string } | null;

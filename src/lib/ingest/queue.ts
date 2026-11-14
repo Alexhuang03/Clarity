@@ -46,12 +46,19 @@ async function drain() {
  */
 export async function resumeInterruptedDocuments() {
   const admin = createAdminClient();
-  const { data: documents, error } = await admin
+  const { data: found, error } = await admin
     .from("documents")
     .select("id, status")
     .in("status", ["uploaded", "parsing"])
     .order("created_at");
+  let documents = found;
   if (error) return console.error("[file] reprise impossible", error.message);
+  // Documents rédigés par le mode professeur : pas un fichier à lire (voir src/lib/teach/queue.ts)
+  if (documents?.length) {
+    const { data: teach } = await admin.from("course_web").select("document_id").in("document_id", documents.map((d) => d.id));
+    const generated = new Set((teach ?? []).map((t) => t.document_id));
+    documents = documents.filter((d) => !generated.has(d.id));
+  }
   if (!documents?.length) return;
 
   const interrupted = documents.filter((d) => d.status === "parsing").map((d) => d.id);

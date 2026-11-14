@@ -41,7 +41,23 @@ export const RATE_LIMITS = {
   ingest: [{ bucket: "ingest:10min", limit: 20, windowSec: 10 * MINUTE }, { bucket: "ingest:day", limit: 100, windowSec: DAY }, LLM_DAILY],
   /** Outils d'étude (quiz, fiches, flashcards, examens blancs, cartes mentales...) */
   study: [{ bucket: "llm:study:min", limit: 6, windowSec: MINUTE }, { bucket: "llm:study:hour", limit: 60, windowSec: HOUR }, { bucket: "llm:study:day", limit: 200, windowSec: DAY }, LLM_DAILY],
+  /** Mode professeur : génération d'un cours complet à partir d'un sujet (recherche web + 1 appel par chapitre) */
+  teach: [{ bucket: "llm:teach:hour", limit: 3, windowSec: HOUR }, { bucket: "llm:teach:day", limit: 3, windowSec: DAY }, LLM_DAILY],
+  /** Appels à l'IA supplémentaires prévus par une génération du mode professeur : un seul appel, avec un coût */
+  teachCall: [{ bucket: "llm:teach-calls:day", limit: 30, windowSec: DAY }, LLM_DAILY],
 } satisfies Record<string, RateRule[]>;
+
+/**
+ * Plafonds communs à TOUS les utilisateurs (protègent le quota partagé des clés d'IA).
+ * À utiliser avec `enforceGlobalRateLimits`.
+ */
+export const GLOBAL_RATE_LIMITS = {
+  /** Mode professeur : générations par jour, tous utilisateurs confondus */
+  teach: [{ bucket: "teach:global:day", limit: 5, windowSec: DAY }],
+} satisfies Record<string, RateRule[]>;
+
+/** Identifiant sentinelle des compteurs globaux (table rate_limits_global, migration 20261114000002) */
+const GLOBAL_ID = "00000000-0000-0000-0000-000000000000";
 
 const BUCKET = /^[a-z0-9:_.-]{1,64}$/;
 
@@ -51,7 +67,7 @@ const globalForLimits = globalThis as typeof globalThis & { __clarityRateLimits?
 const memory = (globalForLimits.__clarityRateLimits ??= new Map());
 let warned = false;
 
-function hitMemory(userId: string, rule: RateRule) {
+function hitMemory(userId: string, rule: RateRule, cost: number) {
   const key = `${userId}|${rule.bucket}`;
   const now = Date.now();
   let counter = memory.get(key);
@@ -59,7 +75,7 @@ function hitMemory(userId: string, rule: RateRule) {
     counter = { start: now, hits: 0 };
     memory.set(key, counter);
   }
-  counter.hits++;
+  counter.hits += cost;
   // Ménage léger pour ne pas grossir indéfiniment
   if (memory.size > 50_000) {
     for (const [k, c] of memory) if (now - c.start > DAY * 1000) memory.delete(k);
@@ -70,13 +86,15 @@ function hitMemory(userId: string, rule: RateRule) {
   };
 }
 
-async function hit(userId: string, rule: RateRule) {
+async function hit(userId: string, rule: RateRule, cost: number) {
   try {
     const { data, error } = await createAdminClient().rpc("rate_limit_hit", {
       p_user_id: userId,
       p_bucket: rule.bucket,
       p_limit: rule.limit,
       p_window_seconds: rule.windowSec,
+      // Envoyé seulement s'il diffère de 1 : reste compatible avec une base sans la migration du coût
+      ...(cost !== 1 ? { p_cost: cost } : {}),
     });
     if (error) throw error;
     const row = (Array.isArray(data) ? data[0] : data) as { allowed: boolean; retry_after: number } | null;
@@ -87,7 +105,7 @@ async function hit(userId: string, rule: RateRule) {
       warned = true;
       console.warn("[sécurité] limitation de débit en base indisponible, repli en mémoire :", (error as Error).message);
     }
-    return hitMemory(userId, rule);
+    return hitMemory(userId, rule, cost);
   }
 }
 
@@ -102,17 +120,27 @@ export async function enforceRateLimit(userId: string, bucket: string, opts: { l
   return enforceRateLimits(userId, [{ bucket, ...opts }]);
 }
 
-/** Compte un appel pour plusieurs règles (ex. par minute + par jour). Refusé si l'une d'elles est dépassée. */
-export async function enforceRateLimits(userId: string, rules: RateRule[]): Promise<RateLimitResult> {
+/**
+ * Compte un appel pour plusieurs règles (ex. par minute + par jour). Refusé si l'une d'elles est dépassée.
+ * `cost` : nombre d'unités comptées par cet appel (1 par défaut).
+ */
+export async function enforceRateLimits(userId: string, rules: RateRule[], { cost = 1 } = {}): Promise<RateLimitResult> {
   if (!userId) return { ok: false, retryAfterSec: 60, message: "Non connecté." };
+  if (!Number.isInteger(cost) || cost < 1 || cost > 1000) throw new Error(`Coût invalide : ${cost}`);
   for (const rule of rules) {
     if (!BUCKET.test(rule.bucket)) throw new Error(`Nom de compteur invalide : ${rule.bucket}`);
   }
-  const results = await Promise.all(rules.map((rule) => hit(userId, rule)));
+  const results = await Promise.all(rules.map((rule) => hit(userId, rule, cost)));
   const refused = results.filter((r) => !r.allowed);
   if (refused.length === 0) return { ok: true };
   const retryAfterSec = Math.max(...refused.map((r) => r.retryAfter));
   return { ok: false, retryAfterSec, message: waitMessage(retryAfterSec) };
+}
+
+/** Compte un appel sur des plafonds globaux (tous utilisateurs). Message générique en cas de refus. */
+export async function enforceGlobalRateLimits(rules: RateRule[], opts: { cost?: number } = {}): Promise<RateLimitResult> {
+  const result = await enforceRateLimits(GLOBAL_ID, rules, opts);
+  return result.ok ? result : { ...result, message: "Le service est très demandé aujourd'hui. Réessaie demain." };
 }
 
 /** Réponse HTTP 429 pour une route d'API. */

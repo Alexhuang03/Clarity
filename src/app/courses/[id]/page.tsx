@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { CourseRow, DocumentRow, MessageRow, PartRow } from "@/lib/course/types";
 import type { AnnotationRow } from "@/lib/annotations/types";
 import { loadLolPrefs } from "@/lib/annotations/prefs-server";
+import { getCourseWebSources } from "@/lib/teach/sources";
 import { Workspace } from "@/components/course/workspace";
 import { PageSlide } from "@/components/ui/page-slide";
 
@@ -27,8 +28,15 @@ async function CourseContent({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   const supabase = await createClient();
 
-  const [{ data: course }, { data: documents }, { data: parts }, { data: messages }, { data: annotations }, lolPrefs] =
-    await Promise.all([
+  const [
+    { data: course },
+    { data: documents },
+    { data: parts },
+    { data: messages },
+    { data: annotations },
+    lolPrefs,
+    webSources,
+  ] = await Promise.all([
       supabase
         .from("courses")
         .select("id, title, analyzed_at, subject:subjects(name, color)")
@@ -54,6 +62,9 @@ async function CourseContent({ params }: { params: Promise<{ id: string }> }) {
         .eq("messages.course_id", id)
         .order("created_at"),
       loadLolPrefs(supabase),
+      // Cours du mode professeur : ses sources web (null pour un cours importé). Une erreur ici
+      // ne doit pas empêcher d'ouvrir le cours : on l'affiche alors sans ses sources.
+      getCourseWebSources(supabase, id).catch(() => null),
     ]);
   if (!course) notFound();
 
@@ -66,6 +77,7 @@ async function CourseContent({ params }: { params: Promise<{ id: string }> }) {
       initialMessages={(messages ?? []) as MessageRow[]}
       initialAnnotations={(annotations ?? []) as unknown as AnnotationRow[]}
       lolPrefs={lolPrefs}
+      webSources={webSources}
     />
   );
 }

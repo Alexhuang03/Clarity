@@ -142,6 +142,46 @@ export const fr = {
     createCourse: "Créer le cours",
   },
 
+  // Mode professeur : un cours rédigé par l'IA à partir d'un sujet, sourcé sur le web
+  teach: {
+    eyebrow: "Mode professeur",
+    title: "Apprendre un sujet sans cours",
+    intro:
+      "Pas de document ? Dis ce que tu veux apprendre : Clarity rédige un cours complet, appuyé sur des sources du web, et le range avec tes autres cours.",
+    topicLabel: "Que veux-tu apprendre ?",
+    topicPlaceholder: "Ex. La photosynthèse, les intégrales…",
+    options: "Options",
+    optionsHint: "niveau, objectif",
+    levelLabel: "Niveau",
+    levels: ["Collège", "Lycée", "Licence", "Master"],
+    levelOther: "Autre",
+    levelOtherLabel: "Ton niveau",
+    levelPlaceholder: "Ex. Prépa, BTS, grand débutant…",
+    goalLabel: "Objectif (facultatif)",
+    goalPlaceholder: "Ex. Préparer un partiel, comprendre les bases, préparer un exposé…",
+    submit: "Générer le cours",
+    submitting: "Préparation du cours…",
+    examplesLabel: "Exemples :",
+    examples: ["La photosynthèse", "Les intégrales", "La guerre froide", "Les réseaux de neurones", "L'offre et la demande"],
+    topicTooShort: (min: number) => `Décris le sujet en ${min} caractères au moins.`,
+    errorInvalid: "Ce sujet n'a pas pu être accepté. Reformule-le et réessaie.",
+    errorAuth: "Ta session a expiré. Reconnecte-toi puis réessaie.",
+    errorQuota: "Tu as atteint la limite de cours générés pour le moment. Réessaie un peu plus tard.",
+    errorServer: "La génération n'a pas pu démarrer. Réessaie dans un instant.",
+    errorNetwork: "Connexion impossible. Vérifie ta connexion internet et réessaie.",
+    disclaimer: "Cours rédigé par l'IA à partir de sources publiques : vérifie les informations importantes.",
+    // Page du cours
+    badgeWeb: "Cours généré par l'IA à partir du web",
+    badgeWikipedia: "Cours généré par l'IA à partir de Wikipédia",
+    badgeNone: "Cours généré par l'IA",
+    ungrounded: "Ce cours a été rédigé sans sources vérifiées, vérifie les informations importantes.",
+    sourcesTitle: "Sources",
+    sourcesIntro: "Pages consultées pour rédiger ce cours.",
+    sourceLink: (n: number, title: string) => `Source ${n} : ${title} (nouvel onglet)`,
+    citation: (n: number, title: string) => `Voir la source ${n} : ${title}`,
+    googleSuggestions: "Suggestions Google",
+  },
+
   course: {
     backToCourses: "Retour à mes cours",
     revise: "Réviser",
@@ -742,7 +782,7 @@ export const fr = {
     steps: [
       {
         title: "Ajoute tes cours",
-        text: "PDF, Word, PowerPoint, photos, Markdown ou un simple lien : glisse tes fichiers, Clarity les lit pour toi.",
+        text: "PDF, Word, PowerPoint, photos, Markdown, un lien… ou simplement un sujet : Clarity rédige alors le cours pour toi.",
       },
       {
         title: "Comprends pas à pas",
@@ -756,6 +796,7 @@ export const fr = {
     featuresTitle: "Tout ce qu'il faut pour réviser",
     features: [
       { title: "Résumés sourcés", text: "Chaque partie résumée, avec des pastilles qui renvoient au passage exact du document." },
+      { title: "Mode professeur", text: "Pas de document ? Tape un sujet : l'IA rédige un cours complet, sourcé sur le web." },
       { title: "Discussion sur ton cours", text: "Pose tes questions ; l'IA répond à partir de tes documents et montre sa réflexion." },
       { title: "Annotations façon pings", text: "Surligne, questionne, signale une erreur : roue de pings et d'émotes inspirée de League of Legends." },
       { title: "Quiz et examens blancs", text: "QCM, vrai/faux, réponses rédigées corrigées selon un barème, chrono et remise automatique." },

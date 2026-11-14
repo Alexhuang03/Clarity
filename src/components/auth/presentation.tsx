@@ -24,6 +24,8 @@ const icon = (d: React.ReactNode) => (
 // Même ordre que t.landing.features
 const FEATURE_ICONS = [
   icon(<path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h4" />),
+  // Mode professeur : chapeau de diplômé
+  icon(<path d="M2 9.5 12 5l10 4.5-10 4.5L2 9.5ZM6 11.3V16c0 1.2 2.7 3 6 3s6-1.8 6-3v-4.7M22 9.5V15" />),
   icon(<path d="M4 5h16v11H9l-5 4zM8 9h8M8 12h5" />),
   icon(
     <>

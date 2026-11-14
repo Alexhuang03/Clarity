@@ -10,6 +10,7 @@ import { LanguageSwitcher } from "@/components/ui/language-switcher";
 import { Logo } from "@/components/ui/logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { SharedConversation } from "./shared-conversation";
+import { parseSharedWebSources } from "./web-sources";
 
 type SharedCourse = {
   title: string;
@@ -17,6 +18,8 @@ type SharedCourse = {
   shared_at: string;
   parts: PartRow[];
   messages: MessageRow[];
+  /** Cours du mode professeur : ses sources web (null pour un cours importé). Non fiable : voir parseSharedWebSources */
+  web?: unknown;
 };
 
 // Page publique : accessible avec le lien, connecté ou non (voir OPEN_PATHS dans le proxy)
@@ -39,6 +42,7 @@ async function SharedContent({ params }: { params: Promise<{ token: string }> })
   const course = data as SharedCourse | null;
   if (!course) notFound();
   const { t, intl } = await getT();
+  const webSources = parseSharedWebSources(course.web);
 
   return (
     <>
@@ -68,6 +72,7 @@ async function SharedContent({ params }: { params: Promise<{ token: string }> })
       <SharedConversation
         parts={course.parts}
         messages={course.messages}
+        webSources={webSources}
         footer={
           <div className="card relative isolate mb-6 overflow-hidden p-8 text-center">
             <div

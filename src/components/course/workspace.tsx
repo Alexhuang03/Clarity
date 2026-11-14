@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { readStream } from "@/lib/course/read-stream";
@@ -16,6 +17,8 @@ import type { AnnotationRow } from "@/lib/annotations/types";
 import type { LolPrefs } from "@/lib/annotations/prefs";
 import { ThinkingPanel } from "./thinking-panel";
 import { useT } from "@/lib/i18n/client";
+import type { CourseWebSources } from "@/lib/teach/types";
+import { WebSourcesContext, WebSourcesNotice, WebSourcesSection } from "./web-sources";
 
 type Streaming = { kind: "summary" | "chat"; partId?: string; content: string; thinking: string } | null;
 
@@ -24,6 +27,15 @@ type Rewind = { message: MessageRow; later: number; annotations: number | null }
 
 /** Messages de la discussion remplacés par un retour à `from` (les résumés du cours restent) */
 const replacedBy = (from: MessageRow) => (m: MessageRow) => m.kind === "chat" && m.created_at >= from.created_at;
+
+/**
+ * Résumé rédigé par le mode professeur, dont les [1], [2] citent les sources web du cours.
+ * Critère : résumé de l'IA enregistré sans aucune source de document. Le mode professeur enregistre
+ * ses résumés avec sources = [] (ses citations sont les [n] web), alors qu'un résumé généré ensuite
+ * par l'outil ordinaire cite les extraits du document en [S1], [S2] (sources non vides). Les réponses
+ * du chat sont toujours exclues. (Les liens ne sont créés que dans un cours qui a des sources web.)
+ */
+const isWebSummary = (m: MessageRow) => m.role === "assistant" && m.kind === "summary" && !m.sources?.length;
 
 /** En-tête d'un message de l'IA : distingue clairement qui parle, et le type de réponse. */
 function AssistantHeader({ kind, partTitle }: { kind: "summary" | "chat"; partTitle?: string }) {
@@ -153,6 +165,7 @@ export const MessageItem = memo(function MessageItem({
           sources={message.sources}
           variant={message.kind === "summary" ? "summary" : "chat"}
           messageId={message.id}
+          webCitations={isWebSummary(message)}
         />
       </div>
     </article>
@@ -288,6 +301,7 @@ export function Workspace({
   initialMessages,
   initialAnnotations,
   lolPrefs,
+  webSources = null,
 }: {
   course: CourseRow;
   userId: string;
@@ -296,6 +310,8 @@ export function Workspace({
   initialMessages: MessageRow[];
   initialAnnotations: AnnotationRow[];
   lolPrefs: LolPrefs;
+  /** Cours rédigé en mode professeur : ses sources web (null pour un cours importé) */
+  webSources?: CourseWebSources | null;
 }) {
   const [supabase] = useState(createClient);
   const { t } = useT();
@@ -380,6 +396,15 @@ export function Workspace({
     }, 2500);
     return () => clearInterval(timer);
   }, [processing, course.id, supabase]);
+
+  // Fin du traitement : les sources web d'un cours du mode professeur (lues par le serveur) peuvent
+  // n'exister qu'à ce moment-là. On recharge les données serveur, sans toucher à l'état de la page.
+  const router = useRouter();
+  const wasProcessing = useRef(processing);
+  useEffect(() => {
+    if (wasProcessing.current && !processing && !webSources) router.refresh();
+    wasProcessing.current = processing;
+  }, [processing, webSources, router]);
 
   useEffect(() => {
     if (streaming) bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -482,7 +507,9 @@ export function Workspace({
       <DropOverlay onFiles={upload} />
       <CourseColumns aside={<CourseOutline messages={shown} parts={parts} documents={documents} onDocumentsChange={setDocuments} onDocumentsSettled={refreshParts} />}>
 
+        <WebSourcesContext value={webSources?.sources ?? null}>
         <div className="flex-1 space-y-10 py-8">
+          {webSources && <WebSourcesNotice data={webSources} />}
           {documents.length === 0 && (
             <div className="mx-auto max-w-md pt-10 text-center">
               <p className="text-lg font-medium">{t.course.emptyTitle}</p>
@@ -568,6 +595,8 @@ export function Workspace({
             </div>
           )}
 
+          {/* Mode professeur : sources web du cours, en fin de cours */}
+          {webSources && !streaming && <WebSourcesSection data={webSources} />}
 
           {error && (
             <p role="alert" className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-danger">
@@ -576,6 +605,7 @@ export function Workspace({
           )}
           <div ref={bottomRef} />
         </div>
+        </WebSourcesContext>
 
         <ChatInput
           key={draft.key}

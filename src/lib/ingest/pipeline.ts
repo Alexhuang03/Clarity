@@ -17,6 +17,12 @@ export async function processDocument(documentId: string) {
 
   const { data: doc, error } = await admin.from("documents").select("*").eq("id", documentId).single();
   if (error || !doc) return console.error("[ingest] document introuvable", documentId, error);
+  // Document d'un cours du mode professeur : rédigé par l'IA (src/lib/teach), il n'y a pas de fichier à relire
+  const { data: teach } = await admin.from("course_web").select("course_id").eq("document_id", documentId).maybeSingle();
+  if (teach) {
+    if (doc.status !== "ready") await setStatus({ status: "error", error: "Supprime ce cours et relance-le." });
+    return;
+  }
 
   try {
     // Client admin = sans RLS : on ne lit jamais un fichier hors du dossier du propriétaire du document

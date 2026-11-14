@@ -135,6 +135,44 @@ export const en: Dictionary = {
     createCourse: "Create course",
   },
 
+  teach: {
+    eyebrow: "Teacher mode",
+    title: "Learn a topic without a course",
+    intro:
+      "No document? Tell Clarity what you want to learn: it writes a complete course backed by web sources and files it with your other courses.",
+    topicLabel: "What do you want to learn?",
+    topicPlaceholder: "E.g. Photosynthesis, integrals…",
+    options: "Options",
+    optionsHint: "level, goal",
+    levelLabel: "Level",
+    levels: ["Middle school", "High school", "Bachelor's", "Master's"],
+    levelOther: "Other",
+    levelOtherLabel: "Your level",
+    levelPlaceholder: "E.g. Prep class, complete beginner…",
+    goalLabel: "Goal (optional)",
+    goalPlaceholder: "E.g. Prepare for an exam, understand the basics, prepare a talk…",
+    submit: "Generate the course",
+    submitting: "Preparing the course…",
+    examplesLabel: "Examples:",
+    examples: ["Photosynthesis", "Integrals", "The Cold War", "Neural networks", "Supply and demand"],
+    topicTooShort: (min: number) => `Describe the topic in at least ${min} characters.`,
+    errorInvalid: "This topic couldn't be accepted. Rephrase it and try again.",
+    errorAuth: "Your session has expired. Sign in again and retry.",
+    errorQuota: "You've reached the limit of generated courses for now. Try again a bit later.",
+    errorServer: "The generation couldn't start. Try again in a moment.",
+    errorNetwork: "Couldn't connect. Check your internet connection and try again.",
+    disclaimer: "Course written by AI from public sources: double-check important information.",
+    badgeWeb: "AI-generated course from the web",
+    badgeWikipedia: "AI-generated course from Wikipedia",
+    badgeNone: "AI-generated course",
+    ungrounded: "This course was written without verified sources: double-check important information.",
+    sourcesTitle: "Sources",
+    sourcesIntro: "Pages consulted to write this course.",
+    sourceLink: (n: number, title: string) => `Source ${n}: ${title} (new tab)`,
+    citation: (n: number, title: string) => `See source ${n}: ${title}`,
+    googleSuggestions: "Google suggestions",
+  },
+
   course: {
     backToCourses: "Back to my courses",
     revise: "Study",
@@ -710,7 +748,7 @@ export const en: Dictionary = {
     steps: [
       {
         title: "Add your courses",
-        text: "PDF, Word, PowerPoint, photos, Markdown or just a link: drop your files and Clarity reads them for you.",
+        text: "PDF, Word, PowerPoint, photos, Markdown, a link… or just a topic: Clarity then writes the course for you.",
       },
       {
         title: "Understand step by step",
@@ -724,6 +762,7 @@ export const en: Dictionary = {
     featuresTitle: "Everything you need to revise",
     features: [
       { title: "Sourced summaries", text: "Every part summarised, with badges pointing to the exact passage in the document." },
+      { title: "Teacher mode", text: "No document? Type a topic: the AI writes a complete course, sourced from the web." },
       { title: "Chat about your course", text: "Ask questions; the AI answers from your documents and shows its reasoning." },
       { title: "Ping-style annotations", text: "Highlight, ask, flag an error: a ping and emote wheel inspired by League of Legends." },
       { title: "Quizzes and mock exams", text: "Multiple choice, true/false, written answers graded against a rubric, timer and auto-submit." },

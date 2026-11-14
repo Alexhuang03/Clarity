@@ -16,7 +16,7 @@ const FLASH: ModelId[] = ["gemini:gemini-3.6-flash", "gemini:gemini-3.5-flash", 
 const FLASH_LITE: ModelId[] = ["gemini:gemini-3.1-flash-lite", "gemini:gemini-3.5-flash-lite", "gemini:gemini-flash-lite-latest"];
 
 // Chaînes de secours : si un modèle échoue (quota, surcharge, délai), on passe au suivant.
-const CHAINS: Record<"summary" | "chat" | "light" | "analysis" | "vision" | "figures" | "study", ModelId[]> = {
+const CHAINS: Record<"summary" | "chat" | "light" | "analysis" | "vision" | "figures" | "study" | "teachPlan" | "teach" | "teachWrite", ModelId[]> = {
   // Outils d'étude (quiz, flashcards, fiches, cartes mentales…) : Flash-Lite d'abord (quota large),
   // pour préserver les ~20 requêtes/jour de Flash réservées aux résumés ; gpt-oss-120b en secours
   study: [FLASH_LITE[0], FLASH_LITE[1], FLASH[0], "groq:openai/gpt-oss-120b", FLASH[1]],
@@ -35,6 +35,13 @@ const CHAINS: Record<"summary" | "chat" | "light" | "analysis" | "vision" | "fig
   // Description des schémas d'un cours en ligne : Flash-Lite suffit, et préserve le quota gratuit
   // de Flash (20 requêtes par jour seulement), réservé aux résumés
   figures: [...FLASH_LITE, FLASH[1]],
+  // Mode professeur. Le quota gratuit de Flash (~20 requêtes/jour) est partagé avec les résumés : Flash seulement
+  // pour le plan (1 appel), Flash-Lite en tête pour les chapitres (jusqu'à 8 appels). Recherche web (Grounding with
+  // Google Search) : Gemini uniquement, Flash-Lite compris.
+  teachPlan: [FLASH[0], FLASH[1], FLASH_LITE[0], FLASH_LITE[1]],
+  teach: [FLASH_LITE[0], FLASH_LITE[1], FLASH[0], FLASH[1]],
+  // Rédaction d'un chapitre sans recherche Google (secours Wikipédia ou de mémoire) : gpt-oss-120b en secours
+  teachWrite: [FLASH_LITE[0], FLASH_LITE[1], "groq:openai/gpt-oss-120b", FLASH[0]],
 };
 
 /** Tous les modèles connus du code : un modèle « préféré » hors de cette liste est ignoré. */

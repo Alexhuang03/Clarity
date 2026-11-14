@@ -3,8 +3,8 @@
 // son identité à l'hébergeur (LCEN, art. 6-III-2). Le nom de l'hébergeur reste obligatoire.
 
 /** Changer la version oblige à tracer un nouveau consentement (enregistré à l'inscription). */
-export const LEGAL_VERSION = "2026-11-10";
-export const LEGAL_UPDATED_AT = "10 novembre 2026";
+export const LEGAL_VERSION = "2026-11-14";
+export const LEGAL_UPDATED_AT = "14 novembre 2026";
 
 export const LEGAL_INFO = {
   publisher: "Alex Huang",
@@ -124,7 +124,8 @@ function Privacy() {
       <Section title="2. Données collectées">
         <ul>
           <li><strong>Compte</strong> : adresse email et mot de passe (stocké uniquement sous forme chiffrée).</li>
-          <li><strong>Contenus de cours</strong> : documents importés, texte extrait, liens, titres et matières.</li>
+          <li><strong>Contenus de cours</strong> : documents importés, texte extrait, liens, titres et matières, et,
+            en mode professeur, le sujet, le niveau et l&apos;objectif que tu saisis.</li>
           <li><strong>Utilisation du service</strong> : conversations avec l&apos;IA, annotations, quiz, réponses et
             scores, flashcards, fiches, cartes mentales et progression par notion.</li>
           <li><strong>Préférences</strong> : modèles d&apos;IA choisis, émotes personnalisées, thème.</li>
@@ -146,6 +147,15 @@ function Privacy() {
           Pour générer les réponses, <strong>des extraits de tes documents et tes messages sont envoyés</strong> à
           des fournisseurs d&apos;IA : Google (Gemini API), Groq et, selon la configuration, OpenRouter. Certains
           sont situés hors de l&apos;Union européenne (notamment aux États-Unis).
+        </p>
+        <p>
+          En <strong>mode professeur</strong> (cours rédigé à partir d&apos;un sujet, sans document), le sujet que tu
+          saisis (ainsi que le niveau et l&apos;objectif éventuels) est envoyé à <strong>Google</strong> (Gemini API
+          avec la recherche Google) pour rechercher des sources sur le web et rédiger le cours. Le sujet peut
+          aussi être envoyé à l&apos;API publique de <strong>Wikipédia</strong> (Wikimedia Foundation, États-Unis)
+          pour trouver des articles à citer. En secours (fournisseur indisponible ou limite atteinte), le sujet et
+          le plan du cours peuvent aussi être envoyés aux autres fournisseurs d&apos;IA cités ci-dessus (Groq,
+          OpenRouter) pour rédiger le cours. N&apos;y saisis donc aucune information personnelle.
         </p>
         <p>
           Les offres gratuites de ces fournisseurs peuvent prévoir que les contenus envoyés soient conservés,

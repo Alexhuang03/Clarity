@@ -1,7 +1,8 @@
 "use client";
 
 import "katex/dist/katex.min.css";
-import { useId } from "react";
+import { use, useId, useMemo } from "react";
+import type { Root } from "mdast";
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
@@ -10,6 +11,7 @@ import { normalizeCitations, normalizeMath, type Source } from "@/lib/course/sou
 import { useT } from "@/lib/i18n/client";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { CitationPill, SourcesList } from "./source-chip";
+import { remarkWebCitations, WebCitation, webCitationNumber, WebSourcesContext } from "./web-sources";
 
 // Typographie aérée : interligne confortable, paragraphes et listes espacés,
 // titres de niveau 3 marqués d'un filet de couleur.
@@ -90,6 +92,8 @@ type Context = {
   idPrefix?: string;
   /** Textes de l'interface (langue courante) */
   t: Dictionary;
+  /** Cours du mode professeur : plugin remark qui relie les citations [1], [2] à ses sources web */
+  webCitations?: () => (tree: Root) => void;
 };
 
 /**
@@ -106,6 +110,8 @@ function MarkdownBlock({ text, ctx, headingBase }: { text: string; ctx: Context;
 
   const components: Components = {
     a({ href, children }) {
+      const webN = webCitationNumber(href);
+      if (webN !== null) return <WebCitation n={webN} />;
       if (href?.startsWith("#src-")) {
         const n = Number(href.slice(5));
         const source = ctx.sources.find((s) => s.n === n);
@@ -142,7 +148,9 @@ function MarkdownBlock({ text, ctx, headingBase }: { text: string; ctx: Context;
     },
   };
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={components}>
+    <ReactMarkdown
+      remarkPlugins={ctx.webCitations ? [remarkGfm, remarkMath, ctx.webCitations] : [remarkGfm, remarkMath]}
+      rehypePlugins={[rehypeKatex]} components={components}>
       {withCitationLinks(text)}
     </ReactMarkdown>
   );
@@ -194,6 +202,7 @@ export function Markdown({
   sources = [],
   variant = "chat",
   messageId,
+  webCitations: linkWebCitations = false,
 }: {
   content: string;
   sources?: Source[];
@@ -201,13 +210,24 @@ export function Markdown({
   variant?: "summary" | "chat" | "bubble";
   /** Message enregistré : ses titres reçoivent des ids stables, repris par le sommaire de la page */
   messageId?: string;
+  /**
+   * Résumé rédigé par le mode professeur : ses citations [1], [2] renvoient aux sources web du cours
+   * (WebSourcesContext). Jamais pour le chat ni les autres textes, où un « [1] » n'est pas une source web.
+   */
+  webCitations?: boolean;
 }) {
   const generatedId = `h${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const idPrefix = messageId ? `h-${messageId}` : generatedId;
   const text = normalizeMath(normalizeCitations(content));
   const { numberOf, cited } = citationNumbers(text, sources);
   const { t } = useT();
-  const ctx: Context = { sources, numberOf, idPrefix, t };
+  const webSources = use(WebSourcesContext);
+  const webCitations = useMemo(
+    () =>
+      linkWebCitations && webSources?.length ? remarkWebCitations(new Set(webSources.map((s) => s.n))) : undefined,
+    [linkWebCitations, webSources],
+  );
+  const ctx: Context = { sources, numberOf, idPrefix, t, webCitations };
 
   if (variant === "summary") {
     const sections = splitSections(text);

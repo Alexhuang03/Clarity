@@ -85,3 +85,43 @@ export function cleanText(value: unknown, max: number): string {
 export function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
   return allowed.includes(value as T) ? (value as T) : fallback;
 }
+
+/**
+ * Refuse les requêtes envoyées depuis un autre site (CSRF) : réponse 403, ou null si la requête est acceptée.
+ * - `Sec-Fetch-Site` (navigateurs récents) : seulement « same-origin » ou « none » (saisie directe) ;
+ * - `Origin`, s'il est présent : même hôte que la requête, ou l'adresse publique du site (NEXT_PUBLIC_SITE_URL).
+ */
+export function requireSameOrigin(request: Request): Response | null {
+  const site = request.headers.get("sec-fetch-site");
+  if (site && site !== "same-origin" && site !== "none") return jsonError("Requête refusée.", 403);
+  const origin = request.headers.get("origin");
+  if (origin) {
+    let originHost: string;
+    try {
+      originHost = new URL(origin).host;
+    } catch {
+      return jsonError("Requête refusée.", 403);
+    }
+    const allowed = new Set<string>();
+    const host = request.headers.get("host");
+    if (host) allowed.add(host);
+    try {
+      allowed.add(new URL(request.url).host);
+    } catch {
+      // URL de requête relative : l'en-tête Host suffit
+    }
+    try {
+      if (process.env.NEXT_PUBLIC_SITE_URL) allowed.add(new URL(process.env.NEXT_PUBLIC_SITE_URL).host);
+    } catch {
+      // Adresse publique mal renseignée : ignorée
+    }
+    if (!allowed.has(originHost)) return jsonError("Requête refusée.", 403);
+  }
+  return null;
+}
+
+/** Le corps doit être déclaré en JSON (une requête « simple » d'un autre site ne peut pas l'être sans préflight CORS). */
+export function requireJsonContentType(request: Request): Response | null {
+  const type = request.headers.get("content-type") ?? "";
+  return /^application\/json\s*(;|$)/i.test(type) ? null : jsonError("Requête invalide.", 415);
+}
