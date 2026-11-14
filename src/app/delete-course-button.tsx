@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { useT } from "@/lib/i18n/client";
 import { deleteCourse } from "./courses/actions";
 
 export function DeleteCourseButton({
@@ -16,21 +17,22 @@ export function DeleteCourseButton({
   children?: React.ReactNode;
 }) {
   const [pending, startTransition] = useTransition();
+  const { t } = useT();
   return (
     <button
       type="button"
       disabled={pending}
       onClick={() => {
-        if (confirm(`Supprimer le cours « ${title} », ses fichiers et ses résumés ? Cette action est irréversible.`)) {
+        if (confirm(t.dashboard.deleteConfirm(title))) {
           startTransition(() => deleteCourse(courseId));
         }
       }}
-      aria-label={`Supprimer le cours ${title}`}
+      aria-label={t.dashboard.deleteCourse(title)}
       aria-busy={pending}
-      title="Supprimer"
+      title={t.common.delete}
       className={className}
     >
-      {children ?? (pending ? "Suppression…" : "Supprimer")}
+      {children ?? (pending ? t.dashboard.deleting : t.common.delete)}
     </button>
   );
 }

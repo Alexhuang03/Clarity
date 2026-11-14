@@ -5,6 +5,7 @@ import { dbError, enforceLimit, enforceStudyLimit, scopeSchema, trustedClient, t
 import { generateJson, StudyError } from "./llm";
 import { computeMastery, knownConcepts, recordConceptEvents, weakConcepts } from "./mastery";
 import { conceptsBlock, quizPrompt } from "./prompts";
+import { STUDY_TEXTS } from "./texts";
 import { gradeAttempt, quizSchema, sanitizeAnswer, toPublic } from "./quiz";
 import type {
   AnswerValue,
@@ -199,17 +200,19 @@ export async function createQuiz(
         types: config.types,
         hasTargets: !!config.targetConcepts?.length,
         hasKnown: known.length > 0,
+        locale: ctx.locale,
       }),
       user: [conceptsBlock({ target: config.targetConcepts, known }), content.block].filter(Boolean).join("\n\n"),
       maxTokens: Math.min(16384, 1500 + config.count * perQuestion),
       temperature: 0.6,
       beforeRetry: () => enforceStudyLimit(userId),
     },
-    quizSchema({ count: config.count, types: config.types, sources: content.sources, quick: mode === "quick" }),
+    quizSchema({ count: config.count, types: config.types, sources: content.sources, quick: mode === "quick", locale: ctx.locale }),
     `génération ${mode}`,
   );
 
-  const title = mode === "quick" ? `Test rapide — ${value.title}` : mode === "exam" ? `Examen blanc — ${value.title}` : value.title;
+  const texts = STUDY_TEXTS[ctx.locale];
+  const title = mode === "quick" ? `${texts.quickPrefix} — ${value.title}` : mode === "exam" ? `${texts.examPrefix} — ${value.title}` : value.title;
   // Le quiz (questions publiques) est inséré avec le client de la requête : la RLS vérifie le cours
   const { data: quiz, error } = await supabase
     .from("study_quizzes")
@@ -431,7 +434,7 @@ export async function submitAttempt(
   if (questions.some((q) => q.type === "short" || q.type === "open")) await enforceStudyLimit(userId);
   let grading;
   try {
-    grading = await gradeAttempt(modelChain("study"), quiz.mode, questions, attempt.answers, () => enforceStudyLimit(userId));
+    grading = await gradeAttempt(modelChain("study"), quiz.mode, questions, attempt.answers, session.ctx.locale, () => enforceStudyLimit(userId));
   } catch (error) {
     if (error instanceof StudyError) {
       throw new StudyError(`${error.message} Tes réponses sont enregistrées : relance la correction.`, error.status, error.headers);

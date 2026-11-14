@@ -3,11 +3,11 @@
 import Link from "next/link";
 import CountUp from "@/components/reactbits/CountUp";
 import type { ConceptMastery, StatsResponse } from "@/lib/study/types";
+import { useT } from "@/lib/i18n/client";
 import { formatDate } from "./api";
 import { ErrorNote, SectionTitle, scoreTone } from "./ui";
 import { useStudyResource } from "./use-study";
 
-const MODE_LABEL = { quiz: "Quiz", exam: "Examen blanc", quick: "Test rapide" } as const;
 const MODE_PATH = { quiz: "quiz", exam: "examen", quick: "test-rapide" } as const;
 
 function Tile({ value, suffix, label, href }: { value: number | null; suffix?: string; label: string; href?: string }) {
@@ -48,6 +48,7 @@ function MasteryBar({ concept }: { concept: ConceptMastery }) {
 export function StudyStats({ courseId }: { courseId: string }) {
   const { data, error, loading, reload } = useStudyResource<StatsResponse>(courseId, "/stats");
   const base = `/courses/${courseId}/study`;
+  const { t, intl } = useT();
 
   if (error) return <ErrorNote message={error} onRetry={reload} />;
   if (loading || !data) {
@@ -66,33 +67,33 @@ export function StudyStats({ courseId }: { courseId: string }) {
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Tile value={totals.streakDays} label={totals.streakDays > 1 ? "jours d'affilée" : "jour d'affilée"} />
-        <Tile value={totals.cardsDue} label="cartes à réviser" href={`${base}/flashcards`} />
-        <Tile value={totals.quizzesTaken} label="quiz remis" />
+        <Tile value={totals.streakDays} label={t.study.streak(totals.streakDays)} />
+        <Tile value={totals.cardsDue} label={t.study.cardsDue} href={`${base}/flashcards`} />
+        <Tile value={totals.quizzesTaken} label={t.study.quizzesTaken} />
         <Tile
           value={totals.averagePercent === null ? null : Math.round(totals.averagePercent)}
           suffix=" %"
-          label="score moyen"
+          label={t.study.averageScore}
         />
       </div>
 
       {empty ? (
         <p className="rounded-xl border border-dashed border-line-strong px-4 py-6 text-center text-sm text-muted">
-          Fais un premier quiz ou révise quelques flashcards : ta progression par notion apparaîtra ici.
+          {t.study.statsEmpty}
         </p>
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">
           <section className="card p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
-              <SectionTitle>Notions à retravailler</SectionTitle>
+              <SectionTitle>{t.study.weakTitle}</SectionTitle>
               {weakConcepts.length > 0 && (
                 <Link href={`${base}/test-rapide`} className="-mt-3 text-xs font-medium text-accent-text hover:underline">
-                  Test rapide ciblé →
+                  {t.study.weakQuickTest}
                 </Link>
               )}
             </div>
             {weakConcepts.length === 0 ? (
-              <p className="text-sm text-muted">Aucune notion fragile repérée. Continue comme ça !</p>
+              <p className="text-sm text-muted">{t.study.noWeak}</p>
             ) : (
               <ul className="space-y-3">
                 {weakConcepts.map((c) => (
@@ -103,7 +104,7 @@ export function StudyStats({ courseId }: { courseId: string }) {
             {concepts.length > weakConcepts.length && (
               <details className="mt-4 text-sm">
                 <summary className="cursor-pointer text-muted hover:text-foreground">
-                  Toutes les notions ({concepts.length})
+                  {t.study.allConcepts(concepts.length)}
                 </summary>
                 <ul className="mt-3 space-y-3">
                   {concepts.map((c) => (
@@ -115,9 +116,9 @@ export function StudyStats({ courseId }: { courseId: string }) {
           </section>
 
           <section className="card p-5">
-            <SectionTitle>Dernières tentatives</SectionTitle>
+            <SectionTitle>{t.study.recentTitle}</SectionTitle>
             {recentAttempts.length === 0 ? (
-              <p className="text-sm text-muted">Aucun quiz remis pour l&apos;instant.</p>
+              <p className="text-sm text-muted">{t.study.noAttempts}</p>
             ) : (
               <ul className="-mx-2 space-y-0.5">
                 {recentAttempts.map((a) => (
@@ -129,7 +130,7 @@ export function StudyStats({ courseId }: { courseId: string }) {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate">{a.title}</span>
                         <span className="block text-xs text-muted">
-                          {MODE_LABEL[a.mode]} · {formatDate(a.submittedAt ?? a.startedAt)}
+                          {t.study.modes[a.mode]} · {formatDate(a.submittedAt ?? a.startedAt, intl)}
                         </span>
                       </span>
                       <span className={`font-semibold tabular-nums ${scoreTone(a.percent)}`}>
@@ -140,7 +141,7 @@ export function StudyStats({ courseId }: { courseId: string }) {
                 ))}
               </ul>
             )}
-            <p className="mt-4 text-xs text-muted">{totals.reviewsLast7Days} révisions de cartes ces 7 derniers jours.</p>
+            <p className="mt-4 text-xs text-muted">{t.study.reviewsWeek(totals.reviewsLast7Days)}</p>
           </section>
         </div>
       )}

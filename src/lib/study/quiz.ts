@@ -1,10 +1,12 @@
 import "server-only";
 import type { ModelId } from "@/lib/ai/models";
 import type { Source } from "@/lib/course/sources";
+import type { Locale } from "@/lib/i18n/config";
 import { untrusted } from "@/lib/security/llm";
 import { pickSources } from "./content";
 import { generateJson } from "./llm";
 import { answerBlock, gradingPrompt } from "./prompts";
+import { STUDY_TEXTS } from "./texts";
 import type {
   AnswerValue,
   Answers,
@@ -42,14 +44,20 @@ const numbers = (value: unknown) =>
   Array.isArray(value) ? value.map((n) => Number(String(n).replace(/[^\d]/g, ""))).filter((n) => Number.isInteger(n)) : [];
 
 /** Question renvoyée par l'IA → question propre, ou null si elle est inutilisable. */
-function normalizeQuestion(raw: Raw, allowed: QuestionType[], sources: Source[], quick: boolean): DistributiveOmit<Question, "id"> | null {
+function normalizeQuestion(
+  raw: Raw,
+  allowed: QuestionType[],
+  sources: Source[],
+  quick: boolean,
+  locale: Locale,
+): DistributiveOmit<Question, "id"> | null {
   const type = raw.type as QuestionType;
   if (!allowed.includes(type)) return null;
   const prompt = text(raw.prompt, PROMPT_MAX);
   if (prompt.length < 5) return null;
   const base = {
     prompt,
-    concept: text(raw.concept, CONCEPT_MAX) || "Notion générale",
+    concept: text(raw.concept, CONCEPT_MAX) || STUDY_TEXTS[locale].generalConcept,
     difficulty: DIFFICULTIES.includes(raw.difficulty as Difficulty) ? (raw.difficulty as Difficulty) : ("moyen" as const),
     explanation: text(raw.explanation, TEXT_MAX),
     sources: pickSources(numbers(raw.sources), sources),
@@ -89,7 +97,7 @@ function normalizeQuestion(raw: Raw, allowed: QuestionType[], sources: Source[],
 }
 
 /** Schéma de la réponse de l'IA : au moins ~70 % des questions demandées doivent être exploitables. */
-export function quizSchema(opts: { count: number; types: QuestionType[]; sources: Source[]; quick: boolean }): Schema<{
+export function quizSchema(opts: { count: number; types: QuestionType[]; sources: Source[]; quick: boolean; locale: Locale }): Schema<{
   title: string;
   questions: Question[];
 }> {
@@ -101,7 +109,7 @@ export function quizSchema(opts: { count: number; types: QuestionType[]; sources
     const questions: Question[] = [];
     for (const raw of rawList) {
       if (typeof raw !== "object" || raw === null) continue;
-      const q = normalizeQuestion(raw, opts.types, opts.sources, opts.quick);
+      const q = normalizeQuestion(raw, opts.types, opts.sources, opts.quick, opts.locale);
       if (!q || seen.has(q.prompt.toLowerCase())) continue;
       seen.add(q.prompt.toLowerCase());
       questions.push({ ...q, id: `q${questions.length + 1}` } as Question);
@@ -111,7 +119,7 @@ export function quizSchema(opts: { count: number; types: QuestionType[]; sources
     if (questions.length < needed) {
       return { ok: false, error: `seulement ${questions.length} question(s) valide(s) sur ${opts.count} demandées` };
     }
-    return { ok: true, value: { title: text(obj.title, 150) || "Quiz", questions } };
+    return { ok: true, value: { title: text(obj.title, 150) || STUDY_TEXTS[opts.locale].quizTitle, questions } };
   };
 }
 
@@ -215,6 +223,7 @@ export async function gradeAttempt(
   mode: QuizMode,
   questions: Question[],
   answers: Answers,
+  locale: Locale,
   /** Appelé avant chaque appel supplémentaire à l'IA (correction, autre modèle) : limite de débit */
   beforeRetry?: () => Promise<void>,
 ): Promise<Grading> {
@@ -249,7 +258,7 @@ Réponse de l'élève :\n${answerBlock(q.id, String(answers[q.id] ?? "").slice(0
       .join("\n\n");
     const { value, model: used } = await generateJson(
       chain,
-      { system: gradingPrompt(mode), user: `Réponses à corriger :\n\n${items}`, maxTokens: 4096, temperature: 0.1, beforeRetry },
+      { system: gradingPrompt(mode, locale), user: `Réponses à corriger :\n\n${items}`, maxTokens: 4096, temperature: 0.1, beforeRetry },
       gradesSchema,
       "correction",
     );
@@ -260,7 +269,7 @@ Réponse de l'élève :\n${answerBlock(q.id, String(answers[q.id] ?? "").slice(0
       const g = byId.get(q.id);
       const given = sanitizeAnswer(q, answers[q.id]);
       if (!g) {
-        results.set(q.id, { questionId: q.id, status: "incorrect", score: 0, maxScore: q.points, given, feedback: "Réponse non corrigée par l'IA." });
+        results.set(q.id, { questionId: q.id, status: "incorrect", score: 0, maxScore: q.points, given, feedback: STUDY_TEXTS[locale].notGraded });
         continue;
       }
       let score = roundHalf(Math.min(q.points, g.score));
@@ -288,13 +297,13 @@ Réponse de l'élève :\n${answerBlock(q.id, String(answers[q.id] ?? "").slice(0
   const ordered = questions.map((q) => results.get(q.id)!);
   const score = roundHalf(ordered.reduce((n, r) => n + r.score, 0));
   const maxScore = questions.reduce((n, q) => n + q.points, 0);
-  return { results: ordered, score, maxScore, feedback: overall ?? defaultFeedback(questions, ordered), model };
+  return { results: ordered, score, maxScore, feedback: overall ?? defaultFeedback(questions, ordered, locale), model };
 }
 
-function defaultFeedback(questions: Question[], results: QuestionResult[]): string | null {
+function defaultFeedback(questions: Question[], results: QuestionResult[], locale: Locale): string | null {
   const missed = [
     ...new Set(questions.filter((_, i) => results[i].status !== "correct").map((q) => q.concept)),
   ].slice(0, 5);
-  if (!missed.length) return "Sans faute, bravo !";
-  return `Notions à revoir : ${missed.join(", ")}.`;
+  if (!missed.length) return STUDY_TEXTS[locale].perfect;
+  return STUDY_TEXTS[locale].review(missed.join(", "));
 }

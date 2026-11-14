@@ -5,6 +5,7 @@ import ShinyText from "@/components/reactbits/ShinyText";
 import { Markdown } from "@/components/course/markdown";
 import { SourcesList } from "@/components/course/source-chip";
 import { useTheme } from "@/components/ui/use-theme";
+import { useT } from "@/lib/i18n/client";
 import type { Source, StudyScope } from "@/lib/study/types";
 
 /** Parties et documents prêts du cours, pour choisir le périmètre d'une génération. */
@@ -50,8 +51,9 @@ function useElapsed(active: boolean) {
  * Génération par l'IA en cours (10 à 90 s, sans flux) : libellé qui scintille (ShinyText),
  * chronomètre et squelette du contenu à venir.
  */
-export function Generating({ label = "Génération en cours…", hint }: { label?: string; hint?: string }) {
+export function Generating({ label, hint }: { label?: string; hint?: string }) {
   const dark = useTheme() === "dark";
+  const { t } = useT();
   const seconds = useElapsed(true);
   return (
     <div role="status" aria-live="polite" className="card rise-in p-6 sm:p-8">
@@ -61,17 +63,17 @@ export function Generating({ label = "Génération en cours…", hint }: { label
           <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent" />
         </span>
         <ShinyText
-          text={label}
+          text={label ?? t.study.generating}
           color={dark ? "#a1a1aa" : "#71717a"}
           shineColor={dark ? "#ffffff" : "#18181b"}
           speed={1.8}
           shineWidth={30}
           className="font-medium"
         />
-        <span className="ml-auto text-sm tabular-nums text-muted">{seconds} s</span>
+        <span className="ml-auto text-sm tabular-nums text-muted">{t.study.seconds(seconds)}</span>
       </div>
       <p className="mt-2 text-sm text-muted">
-        {hint ?? "Clarity lit ton cours et prépare le contenu : cela prend généralement entre 10 et 90 secondes."}
+        {hint ?? t.study.generatingHint}
       </p>
       <div className="mt-6 space-y-3" aria-hidden>
         {[92, 78, 85, 60].map((w, i) => (
@@ -83,6 +85,7 @@ export function Generating({ label = "Génération en cours…", hint }: { label
 }
 
 export function ErrorNote({ message, onRetry }: { message: string | null; onRetry?: () => void }) {
+  const { t } = useT();
   if (!message) return null;
   return (
     <div role="alert" className="flex items-start gap-3 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-danger">
@@ -90,7 +93,7 @@ export function ErrorNote({ message, onRetry }: { message: string | null; onRetr
       <p className="min-w-0 flex-1">{message}</p>
       {onRetry && (
         <button type="button" onClick={onRetry} className="shrink-0 font-medium underline-offset-4 hover:underline">
-          Réessayer
+          {t.common.retry}
         </button>
       )}
     </div>
@@ -230,14 +233,15 @@ export function ScopePicker({
   const partIds = value.partIds ?? [];
   const documentIds = value.documentIds ?? [];
   const whole = partIds.length === 0 && documentIds.length === 0;
+  const { t } = useT();
   const toggle = (list: string[], id: string, on: boolean) => (on ? [...list, id] : list.filter((x) => x !== id));
 
   if (options.parts.length === 0 && options.documents.length <= 1) return null;
   return (
-    <Field label="Sur quoi ?" hint={whole ? "tout le cours" : "sélection"}>
+    <Field label={t.study.scopeLabel} hint={whole ? t.study.scopeWhole : t.study.scopeSelection}>
       <div className="flex flex-wrap gap-2">
         <Chip checked={whole} onChange={() => onChange({})}>
-          Tout le cours
+          {t.study.wholeCourse}
         </Chip>
         {options.parts.map((p) => (
           <Chip
@@ -266,9 +270,11 @@ export function ScopePicker({
 }
 
 /** Bouton de suppression en deux temps (pas de fenêtre de confirmation). */
-export function DeleteButton({ onDelete, label = "Supprimer" }: { onDelete: () => Promise<void> | void; label?: string }) {
+export function DeleteButton({ onDelete, label: labelProp }: { onDelete: () => Promise<void> | void; label?: string }) {
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
+  const { t } = useT();
+  const label = labelProp ?? t.common.delete;
   if (!confirm) {
     return (
       <button
@@ -304,7 +310,7 @@ export function DeleteButton({ onDelete, label = "Supprimer" }: { onDelete: () =
         {busy ? "…" : label}
       </button>
       <button type="button" onClick={() => setConfirm(false)} className="btn btn-ghost px-2 py-1 text-xs">
-        Annuler
+        {t.common.cancel}
       </button>
     </span>
   );

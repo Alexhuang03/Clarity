@@ -1,5 +1,7 @@
 "use client";
 
+import { useT } from "@/lib/i18n/client";
+
 /**
  * Progression dans un quiz : une barre par question (répondue, en cours, à venir), cliquable pour
  * y revenir. Inspiré de l'indicateur « bars » du Stepper de React Bits (https://reactbits.dev,
@@ -21,18 +23,19 @@ export function ProgressStepper({
   status?: (index: number) => "correct" | "partial" | "incorrect" | "unanswered";
 }) {
   const done = Array.from({ length: count }, (_, i) => answered(i)).filter(Boolean).length;
+  const { t } = useT();
   return (
     <div>
       <div className="mb-2 flex items-baseline justify-between text-sm">
         <span className="font-medium tabular-nums">
-          Question {current + 1}
+          {t.study.questionOf} {current + 1}
           <span className="text-muted"> / {count}</span>
         </span>
         <span className="text-xs tabular-nums text-muted">
-          {done} répondue{done > 1 ? "s" : ""}
+          {t.study.answered(done)}
         </span>
       </div>
-      <ol className="flex gap-1" aria-label="Questions">
+      <ol className="flex gap-1" aria-label={t.study.questionsLabel}>
         {Array.from({ length: count }, (_, i) => {
           const state = status?.(i);
           const fill = state
@@ -54,7 +57,7 @@ export function ProgressStepper({
                 type="button"
                 onClick={() => onSelect?.(i)}
                 disabled={!onSelect}
-                aria-label={`Question ${i + 1}${answered(i) ? " (répondue)" : ""}`}
+                aria-label={t.study.questionN(i + 1, answered(i))}
                 aria-current={i === current ? "step" : undefined}
                 className="group flex h-4 w-full items-center disabled:cursor-default"
               >

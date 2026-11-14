@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { DocumentRow } from "@/lib/course/types";
+import { useT } from "@/lib/i18n/client";
 import { addLink, changeDocumentKind, deleteDocument, getDocumentUrl, registerDocument, retryDocument } from "@/app/courses/actions";
 
 export type DocKind = "cours" | "exo";
@@ -24,12 +25,11 @@ const MIME_BY_EXT: Record<string, string> = {
 };
 export const ACCEPT = Object.keys(MIME_BY_EXT).map((e) => `.${e}`).join(",");
 
-const KIND_LABEL: Record<DocKind, string> = { cours: "Cours", exo: "Exercices" };
-
 /** Envoi de fichiers : stockage, enregistrement, puis lecture par l'IA en arrière-plan. */
 export function useDocumentUpload({ courseId, userId, onChange }: { courseId: string; userId: string; onChange: SetDocuments }) {
   const [supabase] = useState(createClient);
   const [uploads, setUploads] = useState<Upload[]>([]);
+  const { t } = useT();
 
   const upload = useCallback(
     async (files: File[], kind: DocKind) => {
@@ -39,18 +39,18 @@ export function useDocumentUpload({ courseId, userId, onChange }: { courseId: st
         const fail = (error: string) => setUploads((u) => u.map((x) => (x.id === id ? { ...x, error } : x)));
         setUploads((u) => [...u, { id, name: file.name }]);
         if (!MIME_BY_EXT[ext]) {
-          fail("format non pris en charge");
+          fail(t.course.unsupported);
           continue;
         }
         if (file.size > MAX_SIZE) {
-          fail("trop lourd (50 Mo max)");
+          fail(t.course.tooLarge);
           continue;
         }
         // Nom de stockage neutre (les accents et espaces posent problème), le vrai nom est gardé en base
         const path = `${userId}/${courseId}/${crypto.randomUUID()}.${ext}`;
         const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { contentType: MIME_BY_EXT[ext] });
         if (uploadError) {
-          fail("échec de l'envoi");
+          fail(t.course.uploadFailed);
           continue;
         }
         const result = await registerDocument({ courseId, storagePath: path, filename: file.name, mimeType: MIME_BY_EXT[ext], kind });
@@ -62,7 +62,7 @@ export function useDocumentUpload({ courseId, userId, onChange }: { courseId: st
         if ("document" in result && result.document) onChange((docs) => [...docs, result.document as DocumentRow]);
       }
     },
-    [courseId, userId, onChange, supabase],
+    [courseId, userId, onChange, supabase, t],
   );
 
   /** Lien vers un cours en ligne : le serveur le récupère. Renvoie false en cas d'échec (message affiché). */
@@ -77,7 +77,7 @@ export function useDocumentUpload({ courseId, userId, onChange }: { courseId: st
         /* lien invalide : le serveur répondra avec un message clair */
       }
       setUploads((list) => [...list, { id, name, link: true }]);
-      const result = await addLink({ courseId, url, kind }).catch(() => ({ error: "Connexion perdue. Réessaie." }));
+      const result = await addLink({ courseId, url, kind }).catch(() => ({ error: t.course.connectionLost }));
       if ("error" in result && result.error) {
         const error = result.error;
         setUploads((list) => list.map((x) => (x.id === id ? { ...x, error } : x)));
@@ -87,7 +87,7 @@ export function useDocumentUpload({ courseId, userId, onChange }: { courseId: st
       if ("document" in result && result.document) onChange((docs) => [...docs, result.document as DocumentRow]);
       return true;
     },
-    [courseId, onChange],
+    [courseId, onChange, t],
   );
 
   const dismiss = useCallback((id: string) => setUploads((u) => u.filter((x) => x.id !== id)), []);
@@ -123,10 +123,11 @@ export function DocumentList({
   onSettled?: () => void;
 }) {
   const [all, setAll] = useState(false);
+  const { t } = useT();
   const shown = all ? documents : documents.slice(0, 6);
 
   async function remove(doc: DocumentRow) {
-    if (!confirm(`Supprimer « ${doc.filename} » ?\nCe qui en a été tiré ne servira plus aux réponses.`)) return;
+    if (!confirm(t.course.deleteDocConfirm(doc.filename))) return;
     onChange((docs) => docs.filter((d) => d.id !== doc.id));
     await deleteDocument(doc.id);
     onSettled?.();
@@ -143,11 +144,11 @@ export function DocumentList({
   }
 
   if (documents.length === 0) {
-    return <p className="text-xs opacity-50">Aucun document. Ajoute-en avec le bouton + de la barre en bas.</p>;
+    return <p className="text-xs opacity-50">{t.course.noDocuments}</p>;
   }
 
   return (
-    <ul className="space-y-1" aria-label="Documents du cours">
+    <ul className="space-y-1" aria-label={t.course.docsLabel}>
       {shown.map((doc) => {
         const reading = doc.status === "uploaded" || doc.status === "parsing";
         return (
@@ -160,7 +161,7 @@ export function DocumentList({
                 type="button"
                 onClick={() => doc.status === "ready" && void openDocument(doc)}
                 disabled={doc.status !== "ready"}
-                title={doc.source_url ? `${doc.filename}\n${doc.source_url}` : doc.status === "ready" ? `Ouvrir ${doc.filename}` : doc.filename}
+                title={doc.source_url ? `${doc.filename}\n${doc.source_url}` : doc.status === "ready" ? t.course.open(doc.filename) : doc.filename}
                 className="min-w-0 flex-1 truncate text-left enabled:hover:text-indigo-600 enabled:hover:underline dark:enabled:hover:text-indigo-300"
               >
                 {doc.filename}
@@ -168,8 +169,8 @@ export function DocumentList({
               <button
                 type="button"
                 onClick={() => void remove(doc)}
-                aria-label={`Supprimer ${doc.filename}`}
-                title="Supprimer"
+                aria-label={t.course.deleteDoc(doc.filename)}
+                title={t.common.delete}
                 className="shrink-0 rounded px-1 text-xs opacity-0 transition hover:text-red-600 group-hover:opacity-60 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-50"
               >
                 ✕
@@ -179,22 +180,22 @@ export function DocumentList({
               <button
                 type="button"
                 onClick={() => void toggleKind(doc)}
-                title="Changer : cours ou exercices"
+                title={t.course.changeKind}
                 className={`rounded-full px-1.5 font-medium ${
                   doc.kind === "exo" ? "bg-amber-500/15 text-amber-700 dark:text-amber-400" : "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300"
                 }`}
               >
-                {KIND_LABEL[doc.kind]}
+                {t.course.kind[doc.kind]}
               </button>
-              {doc.status === "ready" && <span className="opacity-50">{doc.page_count ? `${doc.page_count} p.` : "prêt"}</span>}
-              {reading && <span className="text-indigo-600 dark:text-indigo-400">{doc.status === "uploaded" ? "en attente…" : `lecture ${doc.progress} %`}</span>}
+              {doc.status === "ready" && <span className="opacity-50">{doc.page_count ? t.course.pages(doc.page_count) : t.course.ready}</span>}
+              {reading && <span className="text-indigo-600 dark:text-indigo-400">{doc.status === "uploaded" ? t.course.waiting : t.course.readingProgress(doc.progress)}</span>}
               {doc.status === "error" && (
                 <>
                   <span className="text-red-600 dark:text-red-400" title={doc.error ?? undefined}>
-                    erreur
+                    {t.course.error}
                   </span>
                   <button type="button" onClick={() => void retry(doc)} className="font-medium text-indigo-600 hover:underline dark:text-indigo-400">
-                    Réessayer
+                    {t.common.retry}
                   </button>
                 </>
               )}
@@ -211,7 +212,7 @@ export function DocumentList({
       {documents.length > 6 && (
         <li>
           <button type="button" onClick={() => setAll((a) => !a)} className="px-1.5 text-xs text-indigo-600 hover:underline dark:text-indigo-400">
-            {all ? "Voir moins" : `Voir les ${documents.length} documents`}
+            {all ? t.course.showLess : t.course.showAllDocs(documents.length)}
           </button>
         </li>
       )}
@@ -235,6 +236,7 @@ export function AddDocumentsButton({
   const [linkMode, setLinkMode] = useState(false);
   const [link, setLink] = useState("");
   const [linkKind, setLinkKind] = useState<DocKind>("cours");
+  const { t } = useT();
   const input = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
   const kind = useRef<DocKind>("cours");
@@ -283,10 +285,10 @@ export function AddDocumentsButton({
       <button
         type="button"
         onClick={() => (open ? close() : setOpen(true))}
-        aria-label="Ajouter des documents"
+        aria-label={t.course.addDocuments}
         aria-expanded={open}
         aria-haspopup="menu"
-        title="Ajouter des documents"
+        title={t.course.addDocuments}
         className={`flex h-10 w-10 items-center justify-center rounded-full text-xl leading-none transition hover:bg-black/5 dark:hover:bg-white/10 ${open ? "rotate-45 bg-black/5 dark:bg-white/10" : ""}`}
       >
         +
@@ -295,13 +297,11 @@ export function AddDocumentsButton({
         // Pas de <form> : ce menu est déjà dans le formulaire de la barre de chat (formulaires imbriqués interdits)
         <div
           role="form"
-          aria-label="Ajouter un lien"
+          aria-label={t.course.addLink}
           className="absolute bottom-full left-0 z-20 mb-2 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-black/10 bg-[var(--background)] p-3 shadow-xl dark:border-white/15"
         >
-          <p className="text-sm font-medium">🔗 Ajouter un lien</p>
-          <p className="mt-0.5 text-xs opacity-60">
-            Page web, PDF en ligne, Google Drive ou Docs (partagé « à tous ceux qui ont le lien »), Dropbox…
-          </p>
+          <p className="text-sm font-medium">🔗 {t.course.addLink}</p>
+          <p className="mt-0.5 text-xs opacity-60">{t.course.addLinkHint}</p>
           <input
             autoFocus
             type="url"
@@ -315,7 +315,7 @@ export function AddDocumentsButton({
               }
             }}
             placeholder="https://…"
-            aria-label="Adresse du cours"
+            aria-label={t.course.linkAddress}
             className="mt-2 w-full rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-indigo-500 dark:border-white/20"
           />
           <div className="mt-2 flex items-center gap-1.5">
@@ -329,12 +329,12 @@ export function AddDocumentsButton({
                   linkKind === k ? "border-indigo-500 bg-indigo-500/10 font-medium" : "border-black/15 dark:border-white/20"
                 }`}
               >
-                {KIND_LABEL[k]}
+                {t.course.kind[k]}
               </button>
             ))}
             <span className="flex-1" />
             <button type="button" onClick={() => setLinkMode(false)} className="rounded-lg px-2 py-1 text-xs opacity-60 hover:opacity-100">
-              Retour
+              {t.common.back}
             </button>
             <button
               type="button"
@@ -342,7 +342,7 @@ export function AddDocumentsButton({
               disabled={!link.trim()}
               className="rounded-lg bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
             >
-              Ajouter
+              {t.course.add}
             </button>
           </div>
         </div>
@@ -352,30 +352,30 @@ export function AddDocumentsButton({
           <button type="button" role="menuitem" className={item} onClick={() => pick("cours", "files")}>
             <span aria-hidden>📘</span>
             <span>
-              <span className="block font-medium">Ajouter un cours</span>
-              <span className="block text-xs opacity-60">PDF, Word, PowerPoint, texte, images</span>
+              <span className="block font-medium">{t.course.addCourse}</span>
+              <span className="block text-xs opacity-60">{t.course.addCourseHint}</span>
             </span>
           </button>
           <button type="button" role="menuitem" className={item} onClick={() => pick("exo", "files")}>
             <span aria-hidden>📝</span>
             <span>
-              <span className="block font-medium">Ajouter des exercices</span>
-              <span className="block text-xs opacity-60">Sujets, TD, annales, corrigés</span>
+              <span className="block font-medium">{t.course.addExercises}</span>
+              <span className="block text-xs opacity-60">{t.course.addExercisesHint}</span>
             </span>
           </button>
           <button type="button" role="menuitem" className={item} onClick={() => setLinkMode(true)}>
             <span aria-hidden>🔗</span>
             <span>
-              <span className="block font-medium">Ajouter un lien</span>
-              <span className="block text-xs opacity-60">Page web, PDF en ligne, Google Drive</span>
+              <span className="block font-medium">{t.course.addLink}</span>
+              <span className="block text-xs opacity-60">{t.course.addLinkMenuHint}</span>
             </span>
           </button>
           {/* Sur téléphone : photographier directement une page */}
           <button type="button" role="menuitem" className={`${item} hidden [@media(pointer:coarse)]:flex`} onClick={() => pick("cours", "camera")}>
             <span aria-hidden>📷</span>
-            <span className="font-medium">Prendre une photo</span>
+            <span className="font-medium">{t.course.takePhoto}</span>
           </button>
-          <p className="px-3 pb-1 pt-1.5 text-[0.6875rem] opacity-50">Astuce : glisse tes fichiers sur la page, ou colle un lien dans la barre. 50 Mo max.</p>
+          <p className="px-3 pb-1 pt-1.5 text-[0.6875rem] opacity-50">{t.course.addTip}</p>
         </div>
       )}
       <input ref={input} type="file" multiple accept={ACCEPT} className="hidden" onChange={take} />
@@ -395,27 +395,28 @@ export function UploadChips({
   onDismiss: (id: string) => void;
 }) {
   const reading = documents.filter((d) => d.status === "uploaded" || d.status === "parsing");
+  const { t } = useT();
   if (!uploads.length && !reading.length) return null;
   const chip = "flex max-w-[16rem] items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs shadow-sm bg-[var(--background)]";
   return (
-    <ul className="mx-auto mb-2 flex max-w-[40rem] flex-wrap gap-1.5" aria-live="polite" aria-label="Documents en cours">
+    <ul className="mx-auto mb-2 flex max-w-[40rem] flex-wrap gap-1.5" aria-live="polite" aria-label={t.course.docsInProgress}>
       {uploads.map((u) => (
         <li key={u.id} title={u.error} className={`${chip} ${u.error ? "max-w-full" : ""} ${u.error ? "border-red-500/40 text-red-700 dark:text-red-400" : "border-black/10 dark:border-white/15"}`}>
           {u.error ? <span aria-hidden>⚠</span> : <span aria-hidden className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />}
           <span className="truncate">{u.name}</span>
-          <span className={u.error ? "min-w-0 opacity-80" : "shrink-0 opacity-70"}>{u.error ?? (u.link ? "récupération…" : "envoi…")}</span>
+          <span className={u.error ? "min-w-0 opacity-80" : "shrink-0 opacity-70"}>{u.error ?? (u.link ? t.course.fetching : t.course.uploading)}</span>
           {u.error && (
-            <button type="button" onClick={() => onDismiss(u.id)} aria-label="Masquer" className="shrink-0 opacity-60 hover:opacity-100">
+            <button type="button" onClick={() => onDismiss(u.id)} aria-label={t.common.hide} className="shrink-0 opacity-60 hover:opacity-100">
               ✕
             </button>
           )}
         </li>
       ))}
       {reading.map((d) => (
-        <li key={d.id} className={`${chip} border-black/10 dark:border-white/15`} title="L'IA lit ce document">
+        <li key={d.id} className={`${chip} border-black/10 dark:border-white/15`} title={t.course.aiReading}>
           <span aria-hidden className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
           <span className="truncate">{d.filename}</span>
-          <span className="shrink-0 tabular-nums opacity-60">{d.status === "uploaded" ? "en attente" : `${d.progress} %`}</span>
+          <span className="shrink-0 tabular-nums opacity-60">{d.status === "uploaded" ? t.course.waitingShort : `${d.progress} %`}</span>
         </li>
       ))}
     </ul>
@@ -427,6 +428,7 @@ export function DropOverlay({ onFiles }: { onFiles: (files: File[], kind: DocKin
   const [visible, setVisible] = useState(false);
   const [over, setOver] = useState<DocKind | null>(null);
   const depth = useRef(0);
+  const { t } = useT();
 
   useEffect(() => {
     const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes("Files");
@@ -483,14 +485,14 @@ export function DropOverlay({ onFiles }: { onFiles: (files: File[], kind: DocKin
       }`}
     >
       <span className="text-4xl">{icon}</span>
-      <span className="text-lg font-semibold">{KIND_LABEL[k]}</span>
+      <span className="text-lg font-semibold">{t.course.kind[k]}</span>
       <span className="text-sm opacity-70">{hint}</span>
     </div>
   );
   return (
     <div className="fixed inset-0 z-[60] flex flex-col gap-4 bg-black/60 p-6 text-white backdrop-blur-sm sm:flex-row sm:p-12" data-drop-overlay>
-      {zone("cours", "📘", "Lâche ici tes fichiers de cours")}
-      {zone("exo", "📝", "Lâche ici tes sujets et exercices")}
+      {zone("cours", "📘", t.course.dropCourse)}
+      {zone("exo", "📝", t.course.dropExercises)}
     </div>
   );
 }

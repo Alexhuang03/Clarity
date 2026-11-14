@@ -19,7 +19,7 @@ import {
 } from "@/lib/annotations/lol";
 import { DEFAULT_VOLUME, normalizeWheel, type LolPrefs } from "@/lib/annotations/prefs";
 import { playSound, setVolume } from "@/lib/annotations/sound";
-import { PING_LABELS } from "@/components/annotations/wheel";
+import { useT } from "@/lib/i18n/client";
 import { deleteCustomEmote, saveLolPrefs } from "./lol-actions";
 
 type Status = { kind: "saving" | "saved" | "error"; text: string } | null;
@@ -40,6 +40,7 @@ export function LolSettings({ initial }: { initial: LolPrefs }) {
   const [volume, setVolumeState] = useState(initial.volume);
   const [muted, setMuted] = useState(initial.muted);
   const [status, setStatus] = useState<Status>(null);
+  const { t } = useT();
 
   // Les aperçus sonores de cette page suivent le réglage en cours
   useEffect(() => setVolume(muted ? 0 : volume), [volume, muted]);
@@ -47,9 +48,9 @@ export function LolSettings({ initial }: { initial: LolPrefs }) {
   const statusTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   async function save(patch: Parameters<typeof saveLolPrefs>[0]) {
     clearTimeout(statusTimer.current);
-    setStatus({ kind: "saving", text: "Enregistrement…" });
+    setStatus({ kind: "saving", text: t.common.saving });
     const result = await saveLolPrefs(patch);
-    setStatus(result.error ? { kind: "error", text: result.error } : { kind: "saved", text: "Enregistré" });
+    setStatus(result.error ? { kind: "error", text: result.error } : { kind: "saved", text: t.account.saved });
     if (!result.error) statusTimer.current = setTimeout(() => setStatus(null), 1500);
   }
 
@@ -115,6 +116,8 @@ export function LolSettings({ initial }: { initial: LolPrefs }) {
 function PingSection({ pings, onChange }: { pings: Record<PingAction, PingId>; onChange: (p: Record<PingAction, PingId>) => void }) {
   const [action, setAction] = useState<PingAction>("question");
   const [note, setNote] = useState<string | null>(null);
+  const { t } = useT();
+  const pingName = (id: PingId) => t.annotations.pings[id] ?? pingById(id)!.label;
   const isDefault = PING_ACTIONS.every((a) => pings[a] === DEFAULT_PINGS[a]);
 
   function choose(id: PingId) {
@@ -125,7 +128,7 @@ function PingSection({ pings, onChange }: { pings: Record<PingAction, PingId>; o
     const owner = PING_ACTIONS.find((a) => a !== action && pings[a] === id);
     const next = { ...pings, [action]: id };
     if (owner) next[owner] = pings[action];
-    setNote(owner ? `Échangé avec « ${PING_LABELS[owner]} », qui prend ${pingById(pings[action])!.label}.` : null);
+    setNote(owner ? t.account.swapped(t.annotations.action[owner], pingName(pings[action])) : null);
     onChange(next);
   }
 
@@ -133,10 +136,8 @@ function PingSection({ pings, onChange }: { pings: Record<PingAction, PingId>; o
     <section className={card}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-medium">Pings des actions</h2>
-          <p className="mt-1 text-sm opacity-70">
-            L&apos;icône, le son et la couleur de chaque action de la roue (clic droit maintenu ou Alt + glisser).
-          </p>
+          <h2 className="font-medium">{t.account.pingsTitle}</h2>
+          <p className="mt-1 text-sm opacity-70">{t.account.pingsText}</p>
         </div>
         <button
           type="button"
@@ -147,11 +148,11 @@ function PingSection({ pings, onChange }: { pings: Record<PingAction, PingId>; o
             onChange({ ...DEFAULT_PINGS });
           }}
         >
-          Par défaut
+          {t.account.reset}
         </button>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4" role="tablist" aria-label="Action à modifier">
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4" role="tablist" aria-label={t.account.actionToEdit}>
         {PING_ACTIONS.map((a) => {
           const ping = pingById(pings[a])!;
           const selected = a === action;
@@ -172,13 +173,13 @@ function PingSection({ pings, onChange }: { pings: Record<PingAction, PingId>; o
             >
               {/* eslint-disable-next-line @next/next/no-img-element -- icône de ping */}
               <img src={pingIconUrl(ping.icon)} alt="" className="h-9 w-9" />
-              <span className="text-center leading-tight">{PING_LABELS[a]}</span>
+              <span className="text-center leading-tight">{t.annotations.action[a]}</span>
             </button>
           );
         })}
       </div>
 
-      <p className="mt-4 text-xs font-semibold uppercase tracking-wide opacity-50">Ping pour « {PING_LABELS[action]} »</p>
+      <p className="mt-4 text-xs font-semibold uppercase tracking-wide opacity-50">{t.account.pingFor(t.annotations.action[action])}</p>
       <div className="mt-2 grid grid-cols-4 gap-2 rounded-xl bg-[#0a1016] p-3 sm:grid-cols-6">
         {ALL_PINGS.map((ping) => {
           const selected = pings[action] === ping.id;
@@ -188,7 +189,7 @@ function PingSection({ pings, onChange }: { pings: Record<PingAction, PingId>; o
               key={ping.id}
               type="button"
               onClick={() => choose(ping.id)}
-              title={`${ping.label}${owner ? ` (utilisé par « ${PING_LABELS[owner]} »)` : ""}`}
+              title={`${pingName(ping.id)}${owner ? t.account.usedBy(t.annotations.action[owner]) : ""}`}
               aria-pressed={selected}
               className={`group relative flex flex-col items-center gap-1 rounded-lg p-1.5 text-[0.65rem] leading-tight text-[#c8aa6e] transition ${
                 selected ? "bg-white/10 ring-2" : "hover:bg-white/5"
@@ -202,12 +203,12 @@ function PingSection({ pings, onChange }: { pings: Record<PingAction, PingId>; o
                 className={`h-10 w-10 transition ${selected ? "scale-110" : owner ? "opacity-40" : "grayscale-[.6] group-hover:grayscale-0"}`}
                 style={selected ? { filter: `drop-shadow(0 0 6px ${ping.color})` } : undefined}
               />
-              <span className="text-center">{ping.label}</span>
+              <span className="text-center">{pingName(ping.id)}</span>
             </button>
           );
         })}
       </div>
-      <p className="mt-2 min-h-4 text-xs opacity-60">{note ?? "Clique sur un ping pour l'entendre et le choisir."}</p>
+      <p className="mt-2 min-h-4 text-xs opacity-60">{note ?? t.account.pingHint}</p>
     </section>
   );
 }
@@ -216,6 +217,8 @@ function PingSection({ pings, onChange }: { pings: Record<PingAction, PingId>; o
 
 function EmoteWheelSection({ wheel, customs, onChange }: { wheel: string[]; customs: CustomEmote[]; onChange: (w: string[]) => void }) {
   const [slot, setSlot] = useState(0);
+  const { t } = useT();
+  const emoteName = (view: { ref: string; label: string }) => t.annotations.emotes[view.ref] ?? view.label;
   const views = useMemo(() => wheel.map((ref) => emoteView(ref, customs)), [wheel, customs]);
   const isDefault = wheel.every((ref, i) => ref === DEFAULT_EMOTE_WHEEL[i]);
   const catalogue = useMemo(
@@ -246,13 +249,11 @@ function EmoteWheelSection({ wheel, customs, onChange }: { wheel: string[]; cust
     <section className={card}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-medium">Roue d&apos;émotes</h2>
-          <p className="mt-1 text-sm opacity-70">
-            Les 8 réactions de la roue (Ctrl + glisser dans un cours). Choisis une case, puis une émote.
-          </p>
+          <h2 className="font-medium">{t.account.wheelTitle}</h2>
+          <p className="mt-1 text-sm opacity-70">{t.account.wheelText}</p>
         </div>
         <button type="button" className={smallButton} disabled={isDefault} onClick={() => onChange([...DEFAULT_EMOTE_WHEEL])}>
-          Par défaut
+          {t.account.reset}
         </button>
       </div>
 
@@ -261,7 +262,7 @@ function EmoteWheelSection({ wheel, customs, onChange }: { wheel: string[]; cust
           className="relative shrink-0 rounded-full bg-[radial-gradient(#101a22,#0a1016)] ring-1 ring-[#463714]"
           style={{ width: size, height: size }}
           role="radiogroup"
-          aria-label="Cases de la roue"
+          aria-label={t.account.wheelSlots}
         >
           {views.map((view, i) => {
             const angle = ((-90 + i * 45) * Math.PI) / 180;
@@ -272,8 +273,8 @@ function EmoteWheelSection({ wheel, customs, onChange }: { wheel: string[]; cust
                 type="button"
                 role="radio"
                 aria-checked={selected}
-                aria-label={`Case ${i + 1} : ${view?.label ?? "vide"}`}
-                title={view?.label}
+                aria-label={t.account.slot(i + 1, view ? emoteName(view) : t.account.empty)}
+                title={view ? emoteName(view) : undefined}
                 onClick={() => setSlot(i)}
                 className={`absolute overflow-hidden rounded-full transition ${
                   selected ? "z-10 scale-110 ring-[3px] ring-[#f0e6d2]" : "ring-1 ring-[#785a28] hover:ring-[#c8aa6e]"
@@ -291,12 +292,12 @@ function EmoteWheelSection({ wheel, customs, onChange }: { wheel: string[]; cust
             );
           })}
           <div className="absolute left-1/2 top-1/2 w-24 -translate-x-1/2 -translate-y-1/2 text-center text-[0.65rem] font-semibold uppercase leading-tight tracking-wide text-[#1fa9e0]">
-            {views[slot]?.label ?? ""}
+            {views[slot] ? emoteName(views[slot]) : ""}
           </div>
         </div>
 
         <div className="w-full min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide opacity-50">Émote pour la case {slot + 1}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide opacity-50">{t.account.emoteForSlot(slot + 1)}</p>
           <div className="mt-2 grid max-h-72 grid-cols-6 gap-1.5 overflow-y-auto rounded-xl bg-[#0a1016] p-2 sm:grid-cols-7">
             {catalogue.map((view) => {
               const at = wheel.indexOf(view.ref);
@@ -305,8 +306,8 @@ function EmoteWheelSection({ wheel, customs, onChange }: { wheel: string[]; cust
                   key={view.ref}
                   type="button"
                   onClick={() => place(view.ref)}
-                  title={`${view.label}${view.custom ? " (importée)" : ""}${at !== -1 ? ` · case ${at + 1}` : ""}`}
-                  aria-label={view.label}
+                  title={`${emoteName(view)}${view.custom ? t.account.imported : ""}${at !== -1 ? t.account.inSlot(at + 1) : ""}`}
+                  aria-label={emoteName(view)}
                   className={`group relative aspect-square overflow-hidden rounded-full transition hover:scale-110 ${
                     at === slot ? "ring-[3px] ring-[#f0e6d2]" : at !== -1 ? "ring-2 ring-[#c8aa6e]/70" : view.custom ? "ring-1 ring-indigo-400/60" : ""
                   }`}
@@ -323,7 +324,7 @@ function EmoteWheelSection({ wheel, customs, onChange }: { wheel: string[]; cust
             })}
           </div>
           <p className="mt-2 text-xs opacity-60">
-            Survole une émote pour la voir bouger. Les émotes déjà dans la roue portent le numéro de leur case.
+            {t.account.wheelHint}
           </p>
         </div>
       </div>
@@ -348,6 +349,7 @@ function CustomEmotesSection({
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useT();
   const [info, setInfo] = useState<string | null>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const soundInput = useRef<HTMLInputElement>(null);
@@ -371,7 +373,7 @@ function CustomEmotesSection({
       showPreview(null);
       if (!file) return;
       if (imageInput.current) imageInput.current.value = "";
-      return setError("L'image dépasse 2 Mo.");
+      return setError(t.account.imageTooBig);
     }
     setImage(file);
     showPreview(file);
@@ -384,7 +386,7 @@ function CustomEmotesSection({
     if (!file) return setSound(null);
     if (file.size > SOUND_MAX) {
       if (soundInput.current) soundInput.current.value = "";
-      return setError("Le son dépasse 1 Mo.");
+      return setError(t.account.soundTooBig);
     }
     setSound(file);
   }
@@ -408,9 +410,9 @@ function CustomEmotesSection({
     try {
       const res = await fetch("/api/emotes", { method: "POST", body: form });
       const data = (await res.json().catch(() => ({}))) as { emote?: CustomEmote; error?: string };
-      if (!res.ok || !data.emote) throw new Error(data.error ?? "L'import a échoué.");
+      if (!res.ok || !data.emote) throw new Error(data.error ?? t.account.importFailed);
       onAdded(data.emote);
-      setInfo(`« ${data.emote.name} » ajoutée. Place-la dans ta roue juste au-dessus.`);
+      setInfo(t.account.added(data.emote.name));
       setName("");
       setImage(null);
       showPreview(null);
@@ -418,29 +420,28 @@ function CustomEmotesSection({
       if (imageInput.current) imageInput.current.value = "";
       if (soundInput.current) soundInput.current.value = "";
     } catch (err) {
-      setError(err instanceof Error ? err.message : "L'import a échoué.");
+      setError(err instanceof Error ? err.message : t.account.importFailed);
     } finally {
       setBusy(false);
     }
   }
 
   async function remove(emote: CustomEmote) {
-    if (!window.confirm(`Supprimer « ${emote.name} » ?\nLes réactions posées avec cette émote seront supprimées aussi.`)) return;
+    if (!window.confirm(t.account.deleteEmoteConfirm(emote.name))) return;
     setError(null);
     setInfo(null);
     const result = await deleteCustomEmote(emote.id);
     if (result.error) return setError(result.error);
     onDeleted(emote.id);
     const n = result.removedReactions ?? 0;
-    setInfo(`« ${emote.name} » supprimée${n ? `, ainsi que ${n} réaction${n > 1 ? "s" : ""}` : ""}.`);
+    setInfo(t.account.emoteDeleted(emote.name, n));
   }
 
   return (
     <section className={card}>
-      <h2 className="font-medium">Mes émotes</h2>
+      <h2 className="font-medium">{t.account.myEmotes}</h2>
       <p className="mt-1 text-sm opacity-70">
-        Importe tes propres images (PNG, GIF, WebP ou JPEG, 2 Mo max), avec un son si tu veux (OGG, MP3 ou WAV, 1 Mo max).
-        Les GIF et WebP animés s&apos;animent.
+        {t.account.myEmotesText}
       </p>
 
       {customs.length > 0 && (
@@ -455,7 +456,7 @@ function CustomEmotesSection({
                   {c.name}
                 </span>
                 {view.sound && (
-                  <button type="button" onClick={() => void playSound(view.sound!)} className="opacity-60 hover:opacity-100" title="Écouter" aria-label={`Écouter ${c.name}`}>
+                  <button type="button" onClick={() => void playSound(view.sound!)} className="opacity-60 hover:opacity-100" title={t.account.listen} aria-label={t.account.listenTo(c.name)}>
                     🔊
                   </button>
                 )}
@@ -463,8 +464,8 @@ function CustomEmotesSection({
                   type="button"
                   onClick={() => void remove(c)}
                   className="text-red-600 opacity-60 hover:opacity-100 dark:text-red-400"
-                  title="Supprimer"
-                  aria-label={`Supprimer ${c.name}`}
+                  title={t.common.delete}
+                  aria-label={t.account.deleteName(c.name)}
                 >
                   ✕
                 </button>
@@ -478,22 +479,22 @@ function CustomEmotesSection({
         <div className="flex items-center gap-3">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black/10 text-xl dark:bg-white/10">
             {/* eslint-disable-next-line @next/next/no-img-element -- aperçu local avant import */}
-            {preview ? <img src={preview} alt="Aperçu" className="h-full w-full object-cover" /> : "🖼️"}
+            {preview ? <img src={preview} alt={t.account.preview} className="h-full w-full object-cover" /> : "🖼️"}
           </div>
           <label className="min-w-0 flex-1 text-sm">
-            <span className="mb-1 block font-medium">Nom</span>
+            <span className="mb-1 block font-medium">{t.account.name}</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={40}
-              placeholder="Ex. : Je n'y comprends rien"
+              placeholder={t.account.namePlaceholder}
               className="field py-1.5"
             />
           </label>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm">
-            <span className="mb-1 block font-medium">Image</span>
+            <span className="mb-1 block font-medium">{t.account.image}</span>
             <input
               ref={imageInput}
               type="file"
@@ -504,10 +505,10 @@ function CustomEmotesSection({
           </label>
           <label className="text-sm">
             <span className="mb-1 flex items-center gap-2 font-medium">
-              Son <span className="font-normal opacity-60">(facultatif)</span>
+              {t.account.sound} <span className="font-normal opacity-60">{t.account.optional}</span>
               {sound && (
                 <button type="button" onClick={previewSound} className="text-xs font-normal text-indigo-600 hover:underline dark:text-indigo-400">
-                  Écouter
+                  {t.account.listen}
                 </button>
               )}
             </span>
@@ -524,14 +525,14 @@ function CustomEmotesSection({
         {info && <p className="text-sm text-green-700 dark:text-green-400">{info}</p>}
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs opacity-60">
-            {customs.length}/{CUSTOM_MAX} émotes importées
+            {t.account.importedCount(customs.length, CUSTOM_MAX)}
           </span>
           <button
             type="submit"
             disabled={busy || full || !image || !name.trim()}
             className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
           >
-            {busy ? "Import…" : full ? "Limite atteinte" : "Importer"}
+            {busy ? t.account.importing : full ? t.account.limitReached : t.account.import}
           </button>
         </div>
       </form>
@@ -555,6 +556,7 @@ function SoundSection({
   onMuted: (m: boolean) => void;
 }) {
   const percent = Math.round(volume * 100);
+  const { t } = useT();
   // Enregistré une fois le curseur relâché (ou après une courte pause au clavier)
   const commitTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   function change(v: number) {
@@ -567,11 +569,11 @@ function SoundSection({
     <section className={card}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-medium">Son</h2>
-          <p className="mt-1 text-sm opacity-70">Volume des pings et des émotes. Le bouton 🔊 de la roue coupe aussi le son.</p>
+          <h2 className="font-medium">{t.account.soundTitle}</h2>
+          <p className="mt-1 text-sm opacity-70">{t.account.soundText}</p>
         </div>
         <button type="button" className={smallButton} disabled={volume === DEFAULT_VOLUME && !muted} onClick={() => { change(DEFAULT_VOLUME); onMuted(false); }}>
-          Par défaut
+          {t.account.reset}
         </button>
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-4">
@@ -581,10 +583,10 @@ function SoundSection({
           aria-pressed={muted}
           className={`${smallButton} w-28`}
         >
-          {muted ? "🔇 Coupé" : "🔊 Activé"}
+          {muted ? t.account.muted : t.account.unmuted}
         </button>
         <label className={`flex min-w-48 flex-1 items-center gap-3 text-sm ${muted ? "opacity-40" : ""}`}>
-          <span className="sr-only">Volume</span>
+          <span className="sr-only">{t.account.volume}</span>
           <input
             type="range"
             min={0}
@@ -598,7 +600,7 @@ function SoundSection({
           <span className="w-10 text-right tabular-nums">{percent} %</span>
         </label>
         <button type="button" className={smallButton} disabled={muted || volume === 0} onClick={() => void playSound(pingSoundUrl("Base"))}>
-          Tester
+          {t.account.test}
         </button>
       </div>
     </section>

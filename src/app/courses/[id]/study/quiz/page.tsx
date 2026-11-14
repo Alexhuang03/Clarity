@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { getT } from "@/lib/i18n/server";
 import { NoDocuments } from "@/components/study/no-documents";
 import { QuizTool } from "@/components/study/quiz-tools";
 import { loadScopeOptions, ToolSkeleton } from "../scope-options";
 
-export const metadata: Metadata = { title: "Quiz · Clarity" };
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT();
+  return { title: `${t.study.tools["quiz"].label} · Clarity` };
+}
 
 export default function QuizPage({ params }: { params: Promise<{ id: string }> }) {
   return (

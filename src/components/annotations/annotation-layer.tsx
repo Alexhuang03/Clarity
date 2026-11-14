@@ -22,9 +22,10 @@ import { playSound, setVolume } from "@/lib/annotations/sound";
 import { createAnnotation, deleteAnnotation, setAnnotationStatus, updateHighlightColor } from "@/app/courses/annotation-actions";
 import { saveLolPrefs } from "@/app/account/lol-actions";
 import { clusterKey, overlapClusters } from "@/lib/annotations/overlap";
-import { KIND_LABEL, MarginBubble, ThreadView, useThreadRunner, type Actions } from "./threads";
+import { MarginBubble, ThreadView, useThreadRunner, type Actions } from "./threads";
+import { useT } from "@/lib/i18n/client";
 import { AnnotationList, BottomSheet } from "./sheet";
-import { buildPingItems, EmoteFx, hitTest, PING_LABELS, PING_ORDER, PingFx, preloadEmote, Wheel, type WheelHit, type WheelItem } from "./wheel";
+import { buildPingItems, EmoteFx, hitTest, PING_ORDER, PingFx, preloadEmote, Wheel, type WheelHit, type WheelItem } from "./wheel";
 
 type Target = { messageId: string; anchor: Anchor; rect: DOMRect };
 type WheelKind = "ping" | "emote";
@@ -150,21 +151,6 @@ function wordTarget(x: number, y: number): Target | null {
   return targetFromRange(range);
 }
 
-const COMPOSER_TEXT: Record<Composer["kind"], { placeholder: string; hint: string }> = {
-  question: {
-    placeholder: "Qu'est-ce que tu ne comprends pas ?",
-    hint: "Ta question reste attachée au passage, souligné en pointillés.",
-  },
-  understanding: {
-    placeholder: "Reformule ce passage avec tes propres mots…",
-    hint: "Expliquer avec ses mots est la meilleure façon de vérifier qu'on a compris.",
-  },
-  error: {
-    placeholder: "Qu'est-ce qui te semble faux ? (facultatif)",
-    hint: "Le passage est marqué d'une vaguelette rouge, pour être revérifié.",
-  },
-};
-
 /**
  * Couche d'annotation des réponses de l'IA, façon lolPing :
  * - roue de pings : clic droit maintenu sur une sélection, ou Alt maintenu + glisser
@@ -191,6 +177,7 @@ export function AnnotationLayer({
   children: React.ReactNode;
 }) {
   const container = useRef<HTMLDivElement>(null);
+  const { t } = useT();
   const [allAnnotations, setAnnotations] = useState(initialAnnotations);
   const annotations = useMemo(
     () => allAnnotations.filter((a) => messageIds.has(a.message_id)),
@@ -247,14 +234,14 @@ export function AnnotationLayer({
     () => Object.fromEntries(PING_ACTIONS.map((a) => [a, pingById(prefs.pings[a])!])) as Record<PingAction, PingDef>,
     [prefs.pings],
   );
-  const pingItems = useMemo(() => buildPingItems(pings), [pings]);
+  const pingItems = useMemo(() => buildPingItems(pings, t.annotations.action), [pings, t]);
   const emotes = useMemo(
     () => prefs.wheel.map((ref) => emoteView(ref, prefs.customEmotes)).filter((v): v is EmoteView => v !== null),
     [prefs.wheel, prefs.customEmotes],
   );
   const emoteItems = useMemo<WheelItem[]>(
-    () => emotes.map((v) => ({ key: v.ref, label: v.label, icon: v.still, color: "#c8aa6e", round: true })),
-    [emotes],
+    () => emotes.map((v) => ({ key: v.ref, label: t.annotations.emotes[v.ref] ?? v.label, icon: v.still, color: "#c8aa6e", round: true })),
+    [emotes, t],
   );
   const items = wheel?.kind === "emote" ? emoteItems : pingItems;
 
@@ -767,7 +754,7 @@ export function AnnotationLayer({
       <style>{highlightCss(pings)}</style>
       {!supported && (
         <p className="mb-4 rounded-xl bg-amber-500/10 px-4 py-2 text-sm">
-          Ton navigateur ne permet pas d&apos;afficher les annotations. Mets-le à jour (Chrome, Edge, Safari ou Firefox récents).
+          {t.annotations.unsupported}
         </p>
       )}
       {children}
@@ -786,8 +773,8 @@ export function AnnotationLayer({
             type="button"
             {...stopGestures}
             onClick={(e) => setMenu({ annotation: a, x: e.clientX, y: e.clientY })}
-            title={view.label}
-            aria-label={`Réaction : ${view.label}`}
+            title={t.annotations.emotes[view.ref] ?? view.label}
+            aria-label={t.annotations.reaction(t.annotations.emotes[view.ref] ?? view.label)}
             className="group absolute z-10 rounded-full transition hover:z-20 hover:scale-[2.2]"
             style={{ visibility: "hidden" }}
           >
@@ -815,8 +802,8 @@ export function AnnotationLayer({
             type="button"
             {...stopGestures}
             onClick={(e) => openChooser(group.map((a) => a.id), e.clientX, e.clientY)}
-            title={`${group.length} annotations sur ce passage`}
-            aria-label={`${group.length} annotations sur ce passage`}
+            title={t.annotations.onPassage(group.length)}
+            aria-label={t.annotations.onPassage(group.length)}
             data-overlap-badge
             className="absolute z-10 flex items-center justify-center rounded-full bg-indigo-600 text-[0.6rem] font-bold leading-none text-white shadow hover:bg-indigo-500"
             style={{ visibility: "hidden" }}
@@ -835,7 +822,7 @@ export function AnnotationLayer({
               type="button"
               {...stopGestures}
               onClick={openList}
-              aria-label={`Voir les ${threads.length} discussions`}
+              aria-label={t.annotations.showDiscussions(threads.length)}
               className={`flex items-center gap-1.5 rounded-full bg-indigo-600 px-2.5 py-1 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 ${
                 headerSlot ? "" : "fixed right-3 top-3 z-30"
               }`}
@@ -848,7 +835,7 @@ export function AnnotationLayer({
         })()}
 
       {/* Fils de discussion dans la marge de droite (placés par placeBubbles) */}
-      <div ref={marginRef} className="absolute top-0" style={{ display: "none" }} aria-label="Discussions dans la marge">
+      <div ref={marginRef} className="absolute top-0" style={{ display: "none" }} aria-label={t.annotations.marginLabel}>
         {annotations.map((a) =>
           isThreadKind(a.kind) ? (
             <MarginBubble
@@ -894,7 +881,7 @@ export function AnnotationLayer({
               colorSlice={wheel.kind === "ping" ? HIGHLIGHT_SLICE : null}
               lastColor={lastColor}
               interactive={wheel.trigger === "click"}
-              ariaLabel={wheel.kind === "ping" ? "Actions sur la sélection" : "Réactions"}
+              ariaLabel={wheel.kind === "ping" ? t.annotations.wheelActions : t.annotations.wheelReactions}
               onHover={setHit}
               onPick={(picked) => void execute(wheel, picked, { x: wheel.x, y: wheel.y })}
               footer={
@@ -905,13 +892,13 @@ export function AnnotationLayer({
                       onClick={switchKind}
                       className="whitespace-nowrap rounded-full border border-[#785a28] bg-[#0a1016] px-3 py-1 text-xs font-semibold text-[#c8aa6e] shadow-lg hover:text-[#f0e6d2]"
                     >
-                      {wheel.kind === "ping" ? "😀 Réactions (Ctrl)" : "📍 Actions (Alt)"}
+                      {wheel.kind === "ping" ? t.annotations.switchToReactions : t.annotations.switchToActions}
                     </button>
                     <button
                       type="button"
                       onClick={toggleMute}
-                      title={muted ? "Réactiver le son" : "Couper le son"}
-                      aria-label={muted ? "Réactiver le son" : "Couper le son"}
+                      title={muted ? t.annotations.unmute : t.annotations.mute}
+                      aria-label={muted ? t.annotations.unmute : t.annotations.mute}
                       aria-pressed={muted}
                       className="rounded-full border border-[#785a28] bg-[#0a1016] px-2 py-1 text-xs shadow-lg hover:brightness-125"
                     >
@@ -973,7 +960,7 @@ export function AnnotationLayer({
             const current = byId(sheet.id);
             if (!current || !isThreadKind(current.kind)) return null;
             return (
-              <BottomSheet title={KIND_LABEL[current.kind]} onBack={sheet.from ? () => setSheet(sheet.from!) : undefined} onClose={() => setSheet(null)}>
+              <BottomSheet title={t.annotations.kind[current.kind]} onBack={sheet.from ? () => setSheet(sheet.from!) : undefined} onClose={() => setSheet(null)}>
                 <ThreadView annotation={current} ping={pings[current.kind]} pending={pending[current.id]} actions={threadActions(current)} />
               </BottomSheet>
             );
@@ -987,7 +974,7 @@ export function AnnotationLayer({
               : sheet.ids.map(byId).filter((a): a is AnnotationRow => !!a);
           return (
             <BottomSheet
-              title={sheet.mode === "list" ? `Discussions (${list.length})` : `${list.length} annotations à cet endroit`}
+              title={sheet.mode === "list" ? t.annotations.discussions(list.length) : t.annotations.here(list.length)}
               onClose={() => setSheet(null)}
             >
               <AnnotationList annotations={list} pings={pings} pending={pending} onPick={pickFromSheet} />
@@ -998,7 +985,7 @@ export function AnnotationLayer({
       {error && (
         <div role="alert" className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-red-600 px-4 py-2 text-sm text-white shadow-lg">
           {error}
-          <button type="button" onClick={() => setError(null)} className="ml-3 opacity-80 hover:opacity-100" aria-label="Fermer">
+          <button type="button" onClick={() => setError(null)} className="ml-3 opacity-80 hover:opacity-100" aria-label={t.common.close}>
             ✕
           </button>
         </div>
@@ -1029,7 +1016,8 @@ function ComposerPopover({
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const copy = COMPOSER_TEXT[composer.kind];
+  const { t } = useT();
+  const copy = t.annotations.composer[composer.kind];
   const width = Math.min(380, window.innerWidth - 24);
   const required = composer.kind !== "error";
 
@@ -1038,7 +1026,7 @@ function ComposerPopover({
     setSaving(true);
     const result = await createAnnotation({ messageId: composer.target.messageId, kind: composer.kind, anchor: composer.target.anchor, text });
     setSaving(false);
-    if (result.error || !result.annotation) return setError(result.error ?? "Erreur inattendue.");
+    if (result.error || !result.annotation) return setError(result.error ?? t.annotations.unexpected);
     onSaved(result.annotation);
   }
 
@@ -1050,7 +1038,7 @@ function ComposerPopover({
         className="fixed z-50 rounded-2xl border border-black/10 bg-[var(--background)] p-4 shadow-2xl dark:border-white/15"
         style={popoverPosition(composer.target.rect, width, 250)}
         role="dialog"
-        aria-label={PING_LABELS[composer.kind]}
+        aria-label={t.annotations.action[composer.kind]}
         onKeyDown={(e) => {
           if (e.key === "Escape") onCancel();
           if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void save();
@@ -1059,7 +1047,7 @@ function ComposerPopover({
         <div className="mb-2 flex items-center gap-2 text-sm font-semibold" style={{ color: ping.color }}>
           {/* eslint-disable-next-line @next/next/no-img-element -- icône du ping */}
           <img src={pingIconUrl(ping.icon)} alt="" className="h-6 w-6" />
-          {PING_LABELS[composer.kind]}
+          {t.annotations.action[composer.kind]}
         </div>
         <blockquote className="mb-3 line-clamp-2 border-l-2 border-black/15 pl-2 text-xs italic opacity-60 dark:border-white/20">
           {composer.target.anchor.quote}
@@ -1077,7 +1065,7 @@ function ComposerPopover({
         {error && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
         <div className="mt-3 flex items-center justify-end gap-2">
           <button type="button" onClick={onCancel} className="rounded-lg px-3 py-1.5 text-sm opacity-70 hover:opacity-100">
-            Annuler
+            {t.common.cancel}
           </button>
           <button
             type="button"
@@ -1086,7 +1074,7 @@ function ComposerPopover({
             className="rounded-lg px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
             style={{ backgroundColor: ping.color }}
           >
-            {saving ? "Enregistrement…" : "Enregistrer"}
+            {saving ? t.common.saving : t.common.save}
           </button>
         </div>
       </div>
@@ -1108,6 +1096,7 @@ function AnnotationMenu({
   onRecolor: (a: AnnotationRow, color: HighlightColor) => void;
 }) {
   const { annotation } = state;
+  const { t } = useT();
   const width = Math.min(320, window.innerWidth - 24);
   const rect = new DOMRect(state.x - 20, state.y, 0, 12);
   const emote = annotation.kind === "reaction" && annotation.emote ? emoteView(annotation.emote, customEmotes) : null;
@@ -1120,14 +1109,14 @@ function AnnotationMenu({
         className="fixed z-50 rounded-2xl border border-black/10 bg-[var(--background)] p-3 shadow-2xl dark:border-white/15"
         style={popoverPosition(rect, width, 200)}
         role="dialog"
-        aria-label={KIND_LABEL[annotation.kind]}
+        aria-label={t.annotations.kind[annotation.kind]}
       >
-        <p className="text-xs font-semibold uppercase tracking-wide opacity-50">{KIND_LABEL[annotation.kind]}</p>
+        <p className="text-xs font-semibold uppercase tracking-wide opacity-50">{t.annotations.kind[annotation.kind]}</p>
         {emote && (
           <div className="mt-2 flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element -- émote animée */}
             <img src={emote.anim} alt="" className="h-14 w-14 rounded-full object-cover" />
-            <span className="text-sm font-medium">{emote.label}</span>
+            <span className="text-sm font-medium">{t.annotations.emotes[emote.ref] ?? emote.label}</span>
           </div>
         )}
         {annotation.kind === "highlight" && (
@@ -1137,7 +1126,7 @@ function AnnotationMenu({
                 key={color}
                 type="button"
                 onClick={() => onRecolor(annotation, color)}
-                aria-label={`Couleur ${color}`}
+                aria-label={t.annotations.colorLabel(t.annotations.colors[color] ?? color)}
                 className={`h-6 w-6 rounded-full border-2 ${annotation.color === color ? "border-[var(--foreground)]" : "border-transparent"}`}
                 style={{ backgroundColor: HIGHLIGHT_SWATCH[color] }}
               />
@@ -1151,7 +1140,7 @@ function AnnotationMenu({
             disabled={annotation.id.startsWith("tmp-")}
             className="rounded-lg px-3 py-1.5 text-sm text-red-600 hover:bg-red-500/10 disabled:opacity-40 dark:text-red-400"
           >
-            Supprimer
+            {t.common.delete}
           </button>
         </div>
       </div>
@@ -1162,6 +1151,7 @@ function AnnotationMenu({
 /** Ordinateur : liste des annotations qui se chevauchent, près de l'endroit cliqué. */
 function ChooserPopover({ state, onClose, children }: { state: ChooserState; onClose: () => void; children: React.ReactNode }) {
   const width = Math.min(340, window.innerWidth - 24);
+  const { t } = useT();
   return (
     <>
       <div className="fixed inset-0 z-40" {...stopGestures} onPointerDown={(e) => { e.stopPropagation(); onClose(); }} />
@@ -1170,10 +1160,10 @@ function ChooserPopover({ state, onClose, children }: { state: ChooserState; onC
         className="fixed z-50 max-h-[60vh] overflow-y-auto rounded-2xl border border-black/10 bg-[var(--background)] p-3 shadow-2xl dark:border-white/15"
         style={popoverPosition(new DOMRect(state.x - 20, state.y, 0, 12), width, 320)}
         role="dialog"
-        aria-label={`${state.ids.length} annotations à cet endroit`}
+        aria-label={t.annotations.here(state.ids.length)}
         onKeyDown={(e) => e.key === "Escape" && onClose()}
       >
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide opacity-50">{state.ids.length} annotations à cet endroit</p>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide opacity-50">{t.annotations.here(state.ids.length)}</p>
         {children}
       </div>
     </>

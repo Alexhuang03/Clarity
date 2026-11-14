@@ -5,9 +5,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ResetOnLeave } from "@/components/auth/reset-on-leave";
 import { createClient } from "@/lib/supabase/client";
-import { authErrorMessage, isPasswordValid } from "@/lib/auth-errors";
+import { isPasswordValid } from "@/lib/auth-errors";
+import { authErrorText } from "@/lib/i18n/auth";
+import { useT } from "@/lib/i18n/client";
 import { suggestEmail } from "@/lib/email-check";
 import { checkEmailDomain } from "./actions";
+import { syncLocaleAfterLogin } from "@/app/account/locale-actions";
 import { LegalDialog } from "@/components/legal/legal-dialog";
 import { LEGAL_VERSION, type LegalTab } from "@/components/legal/content";
 import {
@@ -34,6 +37,8 @@ export default function SignupPage() {
 function SignupFlow() {
   const router = useRouter();
   const supabase = createClient();
+  const { t } = useT();
+  const authErrorMessage = (e: Parameters<typeof authErrorText>[0]) => authErrorText(e, t);
   const [step, setStep] = useState<"form" | "code">("form");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -58,9 +63,7 @@ function SignupFlow() {
     const { ok } = await checkEmailDomain(email);
     if (!ok) {
       setLoading(false);
-      return setError(
-        `Le domaine « ${email.split("@")[1]} » ne peut pas recevoir d'emails. Vérifie ton adresse.`,
-      );
+      return setError(t.auth.domainCantReceive(email.split("@")[1] ?? ""));
     }
     // Preuve du consentement (RGPD) : version des textes acceptée et date, gardées dans le compte
     const { data, error } = await supabase.auth.signUp({
@@ -79,13 +82,13 @@ function SignupFlow() {
     if (alreadyExists) {
       return setError(
         <>
-          Un compte existe déjà avec cet email.{" "}
+          {t.auth.accountExists}{" "}
           <Link href="/login" className="underline">
-            Se connecter
+            {t.auth.loginLink}
           </Link>{" "}
-          ou{" "}
+          {t.auth.or}{" "}
           <Link href="/forgot-password" className="underline">
-            réinitialiser le mot de passe
+            {t.auth.resetPasswordLink}
           </Link>
           .
         </>,
@@ -111,6 +114,8 @@ function SignupFlow() {
     if (passwordError && passwordError.code !== "same_password") {
       return setError(authErrorMessage(passwordError));
     }
+    // Enregistre dans le nouveau compte la langue choisie avant l'inscription (cookie)
+    await syncLocaleAfterLogin().catch(() => null);
     router.replace("/");
     router.refresh();
   }
@@ -122,25 +127,26 @@ function SignupFlow() {
       setError(authErrorMessage(error));
       return false;
     }
-    setInfo("Nouveau code envoyé.");
+    setInfo(t.auth.newCodeSent);
     return true;
   }
 
   if (step === "code") {
     return (
       <AuthCard
-        title="Vérifie ton email"
+        title={t.auth.verifyTitle}
         subtitle={
           <>
-            Saisis le code à 6 chiffres envoyé à <strong>{email}</strong>. Pense à regarder dans
-            les spams.
+            {t.auth.signupCodeBefore}
+            <strong>{email}</strong>
+            {t.auth.signupCodeAfter}
           </>
         }
       >
         <form onSubmit={verify} className="space-y-3">
           <CodeInput value={code} onChange={setCode} />
           <button disabled={loading || code.length !== 6} className={primaryButton}>
-            {loading ? "Vérification…" : "Valider et créer mon compte"}
+            {loading ? t.auth.verifying : t.auth.validateAndCreate}
           </button>
           <ResendButton onResend={resend} />
           <button
@@ -153,7 +159,7 @@ function SignupFlow() {
             }}
             className="w-full text-sm text-muted transition hover:text-foreground"
           >
-            Modifier mon email
+            {t.auth.changeEmail}
           </button>
         </form>
         <Message type="error">{error}</Message>
@@ -164,19 +170,19 @@ function SignupFlow() {
 
   return (
     <AuthCard
-      title="Créer un compte"
-      subtitle="Un code te sera envoyé par email pour vérifier ton adresse."
+      title={t.auth.signupTitle}
+      subtitle={t.auth.signupSubtitle}
       footer={
         <>
-          Déjà un compte ?{" "}
+          {t.auth.alreadyAccount}{" "}
           <Link href="/login" className={linkClass}>
-            Se connecter
+            {t.auth.loginLink}
           </Link>
         </>
       }
     >
       <form onSubmit={signUp} className="space-y-4">
-        <Field label="Email">
+        <Field label={t.auth.email}>
           {(id) => (
             <input
               id={id}
@@ -186,21 +192,21 @@ function SignupFlow() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value.trim())}
-              placeholder="toi@exemple.com"
+              placeholder={t.auth.emailPlaceholder}
               className={inputClass}
             />
           )}
         </Field>
         {suggestion && (
           <p className="-mt-2 text-sm">
-            Tu voulais dire{" "}
+            {t.auth.didYouMean}{" "}
             <button type="button" onClick={() => setEmail(suggestion)} className={linkClass}>
               {suggestion}
             </button>{" "}
             ?
           </p>
         )}
-        <Field label="Mot de passe">
+        <Field label={t.auth.password}>
           {(id) => (
             <>
               <PasswordInput
@@ -213,7 +219,7 @@ function SignupFlow() {
             </>
           )}
         </Field>
-        <Field label="Confirme le mot de passe">
+        <Field label={t.auth.confirmPassword}>
           {(id) => (
             <>
               <PasswordInput
@@ -224,7 +230,7 @@ function SignupFlow() {
               />
               {confirm.length > 0 && !passwordsMatch && (
                 <p className="text-xs text-danger">
-                  Les mots de passe ne correspondent pas.
+                  {t.auth.passwordsDontMatch}
                 </p>
               )}
             </>
@@ -239,19 +245,19 @@ function SignupFlow() {
             className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded accent-[var(--accent)]"
           />
           <span className="text-muted">
-            J&apos;accepte les{" "}
+            {t.auth.acceptBefore}{" "}
             <button type="button" onClick={() => setLegalTab("cgu")} className={linkClass}>
-              Conditions d&apos;utilisation
+              {t.auth.terms}
             </button>{" "}
-            et la{" "}
+            {t.auth.acceptAnd}{" "}
             <button type="button" onClick={() => setLegalTab("confidentialite")} className={linkClass}>
-              Politique de confidentialité
+              {t.auth.privacy}
             </button>
             .
           </span>
         </label>
         <button disabled={!canSubmit} className={primaryButton}>
-          {loading ? "Création…" : "Créer mon compte"}
+          {loading ? t.auth.creating : t.auth.createMyAccount}
         </button>
       </form>
       <Message type="error">{error}</Message>

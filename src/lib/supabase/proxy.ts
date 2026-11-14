@@ -4,7 +4,9 @@ import { NextResponse, type NextRequest } from "next/server";
 // Pages accessibles sans être connecté (un utilisateur connecté y est renvoyé vers l'accueil)
 const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password"];
 // Pages accessibles à tous, connecté ou non (liens de partage, textes juridiques)
-const OPEN_PATHS = ["/share/", "/legal"];
+const OPEN_PATHS = ["/share/", "/legal/"];
+// Pages ouvertes à l'adresse exacte (un préfixe ouvrirait aussi /legal-xxx)
+const OPEN_EXACT = ["/legal"];
 
 // Rafraîchit la session Supabase et redirige vers /login si l'utilisateur n'est pas connecté.
 export async function updateSession(request: NextRequest) {
@@ -31,7 +33,8 @@ export async function updateSession(request: NextRequest) {
   );
 
   const { data } = await supabase.auth.getClaims();
-  if (OPEN_PATHS.some((p) => request.nextUrl.pathname.startsWith(p))) return response;
+  const path = request.nextUrl.pathname;
+  if (OPEN_EXACT.includes(path) || OPEN_PATHS.some((p) => path.startsWith(p))) return response;
   const isPublic = PUBLIC_PATHS.some((p) => request.nextUrl.pathname.startsWith(p));
 
   if (!data?.claims && !isPublic) {
@@ -48,7 +51,11 @@ export async function updateSession(request: NextRequest) {
     }
     return NextResponse.redirect(url);
   }
-  if (data?.claims && isPublic) {
+  // Seulement pour l'affichage d'une page (GET/HEAD) : un appel de Server Action (POST, en-tête
+  // next-action) fait juste après la connexion, depuis /login ou /signup, doit aboutir (ex. syncLocaleAfterLogin)
+  const isPageNavigation =
+    (request.method === "GET" || request.method === "HEAD") && !request.headers.has("next-action");
+  if (data?.claims && isPublic && isPageNavigation) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";

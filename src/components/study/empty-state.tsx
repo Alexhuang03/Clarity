@@ -1,3 +1,6 @@
+"use client";
+
+import { useT } from "@/lib/i18n/client";
 import { studyTool, type StudyToolSlug } from "./tools";
 
 /**
@@ -15,6 +18,8 @@ export function StudyEmptyState({
   message?: string;
 }) {
   const tool = studyTool(slug);
+  const { t } = useT();
+  const text = t.study.tools[slug];
   return (
     <section className="rise-in mx-auto flex max-w-md flex-col items-center py-16 text-center sm:py-24">
       <div className="relative mb-6">
@@ -24,14 +29,14 @@ export function StudyEmptyState({
           {tool.icon}
         </div>
       </div>
-      <h2 className="text-xl font-semibold tracking-tight">{tool.label}</h2>
-      <p className="mt-2 text-sm leading-relaxed text-muted">{message ?? tool.empty}</p>
+      <h2 className="text-xl font-semibold tracking-tight">{text.label}</h2>
+      <p className="mt-2 text-sm leading-relaxed text-muted">{message ?? text.empty}</p>
       <div className="mt-8">
         {action ?? (
           <button type="button" disabled className="btn btn-primary">
-            {tool.cta}
+            {text.cta}
             <span className="rounded-full bg-white/20 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide">
-              Bientôt
+              {t.study.soon}
             </span>
           </button>
         )}

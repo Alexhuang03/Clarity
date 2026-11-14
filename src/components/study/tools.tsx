@@ -1,18 +1,12 @@
 /**
  * Outils de révision d'un cours : une entrée par page de src/app/courses/[id]/study/.
  * Source unique pour la navigation (onglets), le hub « Réviser » et les états vides.
+ * Les textes (nom, accroche, état vide, bouton) sont dans le dictionnaire : t.study.tools[slug].
  */
 export type StudyToolSlug = "quiz" | "flashcards" | "fiches" | "examen" | "test-rapide" | "mindmap";
 
 export type StudyTool = {
   slug: StudyToolSlug;
-  label: string;
-  /** Une ligne, pour le hub */
-  tagline: string;
-  /** Texte de l'état vide (avant la première génération) */
-  empty: string;
-  /** Libellé du bouton principal */
-  cta: string;
   icon: React.ReactNode;
 };
 
@@ -34,10 +28,6 @@ const svg = (d: React.ReactNode) => (
 export const STUDY_TOOLS: StudyTool[] = [
   {
     slug: "quiz",
-    label: "Quiz",
-    tagline: "Des QCM corrigés et expliqués, partie par partie.",
-    empty: "Aucun quiz pour l'instant. Génère des questions à partir de ton cours : chaque réponse est corrigée et expliquée.",
-    cta: "Générer un quiz",
     icon: svg(
       <>
         <circle cx="12" cy="12" r="9" />
@@ -48,10 +38,6 @@ export const STUDY_TOOLS: StudyTool[] = [
   },
   {
     slug: "flashcards",
-    label: "Flashcards",
-    tagline: "Répétition espacée : revois chaque carte au bon moment.",
-    empty: "Pas encore de cartes. Crée un paquet à partir du cours : les cartes reviennent quand tu es sur le point de les oublier.",
-    cta: "Créer des flashcards",
     icon: svg(
       <>
         <rect x="3" y="6" width="14" height="12" rx="2" />
@@ -61,10 +47,6 @@ export const STUDY_TOOLS: StudyTool[] = [
   },
   {
     slug: "fiches",
-    label: "Fiches",
-    tagline: "L'essentiel du cours sur une page : définitions, formules, pièges.",
-    empty: "Aucune fiche de révision. Génère une fiche synthétique, prête à relire la veille de l'examen.",
-    cta: "Générer une fiche",
     icon: svg(
       <>
         <path d="M6 3h9l4 4v14H6z" />
@@ -74,10 +56,6 @@ export const STUDY_TOOLS: StudyTool[] = [
   },
   {
     slug: "examen",
-    label: "Examen blanc",
-    tagline: "Un sujet complet, chronométré, noté comme le jour J.",
-    empty: "Pas encore d'examen blanc. Lance un sujet complet en temps limité, puis découvre ta note et la correction.",
-    cta: "Lancer un examen blanc",
     icon: svg(
       <>
         <circle cx="12" cy="13" r="8" />
@@ -87,18 +65,10 @@ export const STUDY_TOOLS: StudyTool[] = [
   },
   {
     slug: "test-rapide",
-    label: "Test rapide",
-    tagline: "Cinq questions, deux minutes : idéal entre deux cours.",
-    empty: "Fais le point en deux minutes : cinq questions tirées au hasard dans tout le cours.",
-    cta: "Commencer un test",
     icon: svg(<path d="M13 2 4 14h7l-1 8 9-12h-7z" />),
   },
   {
     slug: "mindmap",
-    label: "Carte mentale",
-    tagline: "Les notions du cours et leurs liens, d'un coup d'œil.",
-    empty: "Aucune carte mentale. Visualise les grandes notions du cours et la façon dont elles s'articulent.",
-    cta: "Générer la carte",
     icon: svg(
       <>
         <circle cx="12" cy="12" r="2.5" />

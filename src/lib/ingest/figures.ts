@@ -69,7 +69,18 @@ async function inParallel<T>(items: T[], limit: number, run: (item: T) => Promis
  * Remplace les images d'un cours en Markdown par leur description.
  * Une image introuvable ou illisible devient « [Schéma : légende] » : le cours est toujours lu.
  */
-export async function describeFigures(markdown: string, onProgress?: (done: number, total: number) => Promise<void>) {
+export type FigureImage = { data: Uint8Array; mimeType: string };
+/** Fournit l'image d'un lien du Markdown : téléchargement (cours en ligne) ou image intégrée (Word, PowerPoint). */
+export type FigureResolver = (href: string) => Promise<FigureImage | null>;
+
+/** Lien vers une image intégrée à un fichier (Word, PowerPoint) : « clarity-figure:n » */
+export const EMBEDDED_PREFIX = "clarity-figure:";
+
+export async function describeFigures(
+  markdown: string,
+  onProgress?: (done: number, total: number) => Promise<void>,
+  resolve: FigureResolver = fetchFigure,
+) {
   // Section de chaque image : le titre qui la précède
   const figures = new Map<string, Figure>();
   let section = "";
@@ -78,7 +89,8 @@ export async function describeFigures(markdown: string, onProgress?: (done: numb
     if (heading) section = heading[1].trim();
     for (const m of line.matchAll(IMAGE)) {
       const href = m[2];
-      if (/^https?:\/\//i.test(href) && !figures.has(href) && figures.size < MAX_FIGURES) {
+      const fetchable = /^https?:\/\//i.test(href) || href.startsWith(EMBEDDED_PREFIX);
+      if (fetchable && !figures.has(href) && figures.size < MAX_FIGURES) {
         figures.set(href, { href, alt: m[1].trim(), section });
       }
     }
@@ -88,7 +100,7 @@ export async function describeFigures(markdown: string, onProgress?: (done: numb
   if (list.length) {
     const t0 = Date.now();
     await inParallel(list, DOWNLOADS_AT_ONCE, async (f) => {
-      const raw = await fetchFigure(f.href);
+      const raw = await resolve(f.href).catch(() => null);
       const image = raw && (await prepare(raw).catch(() => undefined));
       if (image) f.image = image;
       // Icône (trop petite) : retirée ; image introuvable ou illisible : sa légende reste

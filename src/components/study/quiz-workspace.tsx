@@ -18,6 +18,7 @@ import { QuizPlayer } from "./quiz-player";
 import { QuizResults } from "./quiz-results";
 import { DeleteButton, ErrorNote, Generating, ListSkeleton, SectionTitle, scoreTone } from "./ui";
 import { useStudyResource } from "./use-study";
+import { useT } from "@/lib/i18n/client";
 
 type View =
   | { kind: "home" }
@@ -27,7 +28,6 @@ type View =
   | { kind: "play"; quiz: PublicQuiz; attempt: AttemptSummary; answers?: Answers }
   | { kind: "result"; quiz: PublicQuiz; result: AttemptResult };
 
-const MODE_LABEL: Record<QuizMode, string> = { quiz: "Quiz", exam: "Examen blanc", quick: "Test rapide" };
 
 /**
  * Cycle commun au quiz, à l'examen blanc et au test rapide : configuration (fournie par la page),
@@ -38,7 +38,7 @@ export function QuizWorkspace({
   mode,
   renderConfig,
   generatingHint,
-  historyTitle = "Historique",
+  historyTitle,
 }: {
   courseId: string;
   mode: QuizMode;
@@ -49,6 +49,7 @@ export function QuizWorkspace({
 }) {
   const [view, setView] = useState<View>({ kind: "home" });
   const [error, setError] = useState<string | null>(null);
+  const { t, intl } = useT();
   const history = useStudyResource<{ quizzes: QuizSummary[] }>(courseId, "/quizzes");
   const quizzes = history.data?.quizzes.filter((q) => q.mode === mode) ?? [];
 
@@ -150,13 +151,13 @@ export function QuizWorkspace({
           actions={
             <>
               <button type="button" onClick={() => retry(view.quiz)} className="btn btn-primary">
-                Refaire
+                {t.study.redo}
               </button>
               <button type="button" onClick={() => openQuiz(view.quiz.id)} className="btn btn-secondary">
-                Historique des tentatives
+                {t.study.attemptHistory}
               </button>
               <button type="button" onClick={back} className="btn btn-ghost">
-                Terminer
+                {t.study.finish}
               </button>
             </>
           }
@@ -169,30 +170,30 @@ export function QuizWorkspace({
     return (
       <div className="mx-auto max-w-2xl">
         <button type="button" onClick={back} className="btn btn-ghost -ml-3 mb-4 px-3 py-1.5 font-normal">
-          ← Retour
+          ← {t.common.back}
         </button>
         <div className="card p-6">
-          <p className="eyebrow">{MODE_LABEL[quiz.mode]}</p>
+          <p className="eyebrow">{t.study.modes[quiz.mode]}</p>
           <h2 className="mt-1 text-xl font-semibold tracking-tight">{quiz.title}</h2>
           <p className="mt-1 text-sm text-muted">
-            {quiz.questions.length} questions
-            {quiz.timeLimitSec ? ` · ${Math.round(quiz.timeLimitSec / 60)} min` : ""} · créé le {formatDate(quiz.createdAt)}
+            {t.study.questionsCount(quiz.questions.length)}
+            {quiz.timeLimitSec ? ` · ${Math.round(quiz.timeLimitSec / 60)} min` : ""} · {t.study.createdOn(formatDate(quiz.createdAt, intl))}
           </p>
           {quiz.config.targetConcepts && quiz.config.targetConcepts.length > 0 && (
-            <p className="mt-2 text-sm text-muted">Notions ciblées : {quiz.config.targetConcepts.join(", ")}</p>
+            <p className="mt-2 text-sm text-muted">{t.study.targetConcepts(quiz.config.targetConcepts.join(", "))}</p>
           )}
           <div className="mt-5 flex flex-wrap items-center gap-2">
             <button type="button" onClick={() => retry(quiz)} className="btn btn-primary">
-              Nouvelle tentative
+              {t.study.newAttempt}
             </button>
             <span className="ml-auto">
-              <DeleteButton onDelete={() => remove(quiz.id)} label="Supprimer" />
+              <DeleteButton onDelete={() => remove(quiz.id)} />
             </span>
           </div>
         </div>
         <ErrorNote message={error} />
         <div className="mt-8">
-          <SectionTitle>Tentatives</SectionTitle>
+          <SectionTitle>{t.study.attempts}</SectionTitle>
         </div>
         <ul className="space-y-2">
           {attempts.map((a) => (
@@ -203,13 +204,13 @@ export function QuizWorkspace({
                 className="flex w-full items-center gap-4 rounded-xl border border-line bg-surface px-4 py-3 text-left transition hover:border-line-strong"
               >
                 <span className="min-w-0 flex-1 text-sm">
-                  {formatDate(a.submittedAt ?? a.startedAt)}
-                  {a.late && <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">en retard</span>}
+                  {formatDate(a.submittedAt ?? a.startedAt, intl)}
+                  {a.late && <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">{t.study.late}</span>}
                 </span>
                 {a.submittedAt ? (
                   <span className={`font-semibold tabular-nums ${scoreTone(a.percent)}`}>{Math.round(a.percent ?? 0)} %</span>
                 ) : (
-                  <span className="text-sm text-accent-text">Reprendre →</span>
+                  <span className="text-sm text-accent-text">{t.study.resumeArrow}</span>
                 )}
               </button>
             </li>
@@ -224,14 +225,14 @@ export function QuizWorkspace({
       <ErrorNote message={error} />
       {renderConfig(start)}
       <section>
-        <SectionTitle>{historyTitle}</SectionTitle>
+        <SectionTitle>{historyTitle ?? t.study.history}</SectionTitle>
         {history.loading && !history.data ? (
           <ListSkeleton />
         ) : history.error ? (
           <ErrorNote message={history.error} onRetry={history.reload} />
         ) : quizzes.length === 0 ? (
           <p className="rounded-xl border border-dashed border-line-strong px-4 py-6 text-center text-sm text-muted">
-            Rien pour l&apos;instant : ton historique apparaîtra ici.
+            {t.study.historyEmpty}
           </p>
         ) : (
           <ul className="space-y-2">
@@ -249,8 +250,8 @@ export function QuizWorkspace({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{q.title}</span>
                     <span className="mt-0.5 block text-xs text-muted">
-                      {q.questionCount} questions · {formatDate(q.createdAt)} · {q.attemptCount} tentative
-                      {q.attemptCount > 1 ? "s" : ""}
+                      {t.study.questionsCount(q.questionCount)} · {formatDate(q.createdAt, intl)} ·{" "}
+                      {t.study.attemptsCount(q.attemptCount)}
                     </span>
                   </span>
                   <span className="text-right">
@@ -258,7 +259,7 @@ export function QuizWorkspace({
                       {q.lastPercent === null ? "—" : `${Math.round(q.lastPercent)} %`}
                     </span>
                     {q.bestPercent !== null && q.attemptCount > 1 && (
-                      <span className="block text-xs text-muted">meilleur {Math.round(q.bestPercent)} %</span>
+                      <span className="block text-xs text-muted">{t.study.best(Math.round(q.bestPercent))}</span>
                     )}
                   </span>
                 </button>
@@ -267,9 +268,9 @@ export function QuizWorkspace({
                     type="button"
                     onClick={() => resume(q.id, q.inProgress!.id)}
                     className="btn btn-secondary shrink-0 self-center"
-                    title={`Commencée le ${formatDate(q.inProgress.startedAt)}`}
+                    title={t.study.startedOn(formatDate(q.inProgress.startedAt, intl))}
                   >
-                    Reprendre
+                    {t.study.resume}
                   </button>
                 )}
               </li>

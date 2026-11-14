@@ -3,6 +3,7 @@
 import { useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateCourse } from "@/app/courses/actions";
+import { useT } from "@/lib/i18n/client";
 
 const inputClass = "field";
 
@@ -27,6 +28,7 @@ export function EditCourseForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const { t } = useT();
   const unchanged = newTitle.trim() === title && newSubject.trim() === (subject ?? "");
 
   function save(e: React.FormEvent) {
@@ -49,7 +51,7 @@ export function EditCourseForm({
       {/* Requête de conteneur : champs côte à côte seulement si le formulaire est assez large */}
       <div className="grid gap-3 @md:grid-cols-[2fr_1fr]">
         <label className="space-y-1">
-          <span className="text-sm font-medium">Titre</span>
+          <span className="text-sm font-medium">{t.dashboard.titleLabel}</span>
           <input
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
@@ -60,13 +62,13 @@ export function EditCourseForm({
           />
         </label>
         <label className="space-y-1">
-          <span className="text-sm font-medium">Matière</span>
+          <span className="text-sm font-medium">{t.dashboard.subjectLabel}</span>
           <input
             value={newSubject}
             onChange={(e) => setNewSubject(e.target.value)}
             list={listId}
             maxLength={60}
-            placeholder="Aucune"
+            placeholder={t.dashboard.subjectNone}
             className={inputClass}
           />
           <datalist id={listId}>
@@ -81,19 +83,19 @@ export function EditCourseForm({
           disabled={pending || !newTitle.trim()}
           className="btn btn-primary"
         >
-          {pending ? "Enregistrement…" : "Enregistrer"}
+          {pending ? t.common.saving : t.common.save}
         </button>
         <button type="button" onClick={onDone} className="btn btn-ghost">
-          Annuler
+          {t.common.cancel}
         </button>
         {newSubject && (
           <button
             type="button"
             onClick={() => setNewSubject("")}
             className="ml-auto text-sm text-muted transition hover:text-foreground"
-            title="Retirer la matière"
+            title={t.dashboard.removeSubject}
           >
-            Retirer la matière
+            {t.dashboard.removeSubject}
           </button>
         )}
       </div>

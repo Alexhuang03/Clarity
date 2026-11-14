@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useT } from "@/lib/i18n/client";
 import { LEGAL_TABS, LegalContent, type LegalTab } from "./content";
 
 const ICONS: Record<LegalTab, React.ReactNode> = {
@@ -18,8 +19,20 @@ function Icon({ tab, className = "" }: { tab: LegalTab; className?: string }) {
   );
 }
 
+/** Textes juridiques rédigés en français : mention « version française faisant foi » dans les autres langues. */
+export function LegalFrenchNote() {
+  const { t } = useT();
+  if (!t.legal.frenchNote) return null;
+  return (
+    <p className="mb-5 rounded-xl bg-accent-soft px-3 py-2 text-sm text-accent-text">
+      {t.legal.frenchNote}
+    </p>
+  );
+}
+
 /** Onglets + contenu, réutilisés dans la fenêtre et sur la page /legal. */
 export function LegalTabs({ tab, onTab }: { tab: LegalTab; onTab: (t: LegalTab) => void }) {
+  const { t: dict } = useT();
   function onKeyDown(e: React.KeyboardEvent) {
     const i = LEGAL_TABS.findIndex((t) => t.id === tab);
     const next = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : null;
@@ -30,7 +43,7 @@ export function LegalTabs({ tab, onTab }: { tab: LegalTab; onTab: (t: LegalTab) 
     document.getElementById(`legal-tab-${t}`)?.focus();
   }
   return (
-    <div role="tablist" aria-label="Documents juridiques" onKeyDown={onKeyDown} className="grid grid-cols-2 border-b border-line px-2 sm:grid-cols-4 sm:px-4">
+    <div role="tablist" aria-label={dict.legal.tablist} onKeyDown={onKeyDown} className="grid grid-cols-2 border-b border-line px-2 sm:grid-cols-4 sm:px-4">
       {LEGAL_TABS.map((t) => {
         const active = t.id === tab;
         return (
@@ -43,13 +56,13 @@ export function LegalTabs({ tab, onTab }: { tab: LegalTab; onTab: (t: LegalTab) 
             aria-controls="legal-panel"
             tabIndex={active ? 0 : -1}
             onClick={() => onTab(t.id)}
-            title={t.label}
+            title={dict.legal.tabs[t.id].label}
             className={`relative flex min-w-0 items-center justify-center gap-2 px-1 py-2.5 text-sm sm:py-3 transition-colors ${
               active ? "font-medium text-accent-text" : "text-muted hover:text-foreground"
             }`}
           >
             <Icon tab={t.id} />
-            <span className="truncate">{t.short}</span>
+            <span className="truncate">{dict.legal.tabs[t.id].short}</span>
             {active && <span aria-hidden className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-accent" />}
           </button>
         );
@@ -71,6 +84,7 @@ export function LegalDialog({
   const panelRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<LegalTab>(initialTab);
   const [openedWith, setOpenedWith] = useState<LegalTab | null>(null);
+  const { t } = useT();
 
   // Rouvrir la fenêtre sur l'onglet demandé (lien « Conditions » ou « Confidentialité »)
   if (open && openedWith !== initialTab) {
@@ -107,12 +121,12 @@ export function LegalDialog({
             <Icon tab="mentions" className="h-[18px] w-[18px]" />
           </span>
           <h2 id="legal-title" className="flex-1 font-display text-xl italic">
-            Cadre légal &amp; confidentialité
+            {t.legal.title}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Fermer"
+            aria-label={t.common.close}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition hover:bg-surface-2 hover:text-foreground"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4" aria-hidden>
@@ -129,14 +143,15 @@ export function LegalDialog({
           tabIndex={0}
           className="legal-scroll flex-1 overflow-y-auto px-4 py-5 outline-none sm:px-6"
         >
+          <LegalFrenchNote />
           <LegalContent tab={tab} />
         </div>
         <footer className="flex items-center justify-between gap-3 border-t border-line px-4 py-3 sm:px-6">
           <a href="/legal" target="_blank" rel="noopener" className="text-xs text-muted underline-offset-4 hover:text-foreground hover:underline">
-            Ouvrir dans un nouvel onglet
+            {t.legal.openNewTab}
           </a>
           <button type="button" onClick={onClose} className="btn btn-primary">
-            J&apos;ai compris
+            {t.legal.understood}
           </button>
         </footer>
       </div>

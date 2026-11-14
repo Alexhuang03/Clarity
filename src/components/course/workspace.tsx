@@ -15,6 +15,7 @@ import { AnnotationLayer } from "@/components/annotations/annotation-layer";
 import type { AnnotationRow } from "@/lib/annotations/types";
 import type { LolPrefs } from "@/lib/annotations/prefs";
 import { ThinkingPanel } from "./thinking-panel";
+import { useT } from "@/lib/i18n/client";
 
 type Streaming = { kind: "summary" | "chat"; partId?: string; content: string; thinking: string } | null;
 
@@ -26,6 +27,7 @@ const replacedBy = (from: MessageRow) => (m: MessageRow) => m.kind === "chat" &&
 
 /** En-tête d'un message de l'IA : distingue clairement qui parle, et le type de réponse. */
 function AssistantHeader({ kind, partTitle }: { kind: "summary" | "chat"; partTitle?: string }) {
+  const { t } = useT();
   return (
     <div className="mb-3 flex items-center gap-2">
       <span className="flex h-7 w-7 items-center justify-center rounded-full bg-foreground font-display text-[0.95rem] italic text-background">
@@ -34,7 +36,7 @@ function AssistantHeader({ kind, partTitle }: { kind: "summary" | "chat"; partTi
       <span className="text-sm font-semibold">Clarity</span>
       {kind === "summary" && (
         <span className="truncate rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent-text">
-          Résumé{partTitle ? ` · ${partTitle}` : ""}
+          {t.course.summaryBadge(partTitle)}
         </span>
       )}
     </div>
@@ -56,11 +58,12 @@ function QuestionActions({
 }) {
   const [confirm, setConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const { t } = useT();
 
   if (confirm) {
     return (
       <div className="mt-1 flex shrink-0 items-center gap-1 text-sm" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setConfirm(false)}>
-        <span className="opacity-70">Retirer la question et sa réponse ?</span>
+        <span className="opacity-70">{t.course.removeQuestionConfirm}</span>
         <button
           type="button"
           autoFocus
@@ -74,10 +77,10 @@ function QuestionActions({
           }}
           className="rounded-lg bg-red-600 px-2.5 py-1 font-medium text-white hover:bg-red-500 disabled:opacity-60"
         >
-          {deleting ? "…" : "Retirer"}
+          {deleting ? "…" : t.common.remove}
         </button>
         <button type="button" onClick={() => setConfirm(false)} className="rounded-lg px-2 py-1 opacity-70 hover:opacity-100">
-          Garder
+          {t.common.keep}
         </button>
       </div>
     );
@@ -87,8 +90,8 @@ function QuestionActions({
       <button
         type="button"
         onClick={() => setConfirm(true)}
-        aria-label="Retirer ce message"
-        title="Retirer cette question et sa réponse"
+        aria-label={t.course.removeMessage}
+        title={t.course.removeMessageTitle}
         className={actionButton}
       >
         <svg aria-hidden viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6} className="h-4 w-4">
@@ -98,8 +101,8 @@ function QuestionActions({
       <button
         type="button"
         onClick={() => onRewind(message)}
-        aria-label="Revenir à ce message"
-        title="Revenir à ce message : le modifier et reprendre la discussion à partir d'ici"
+        aria-label={t.course.rewindMessage}
+        title={t.course.rewindMessageTitle}
         className={actionButton}
       >
         <svg aria-hidden viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
@@ -192,6 +195,7 @@ function ChatInput({
   onCancelRewind: () => void;
 }) {
   const [value, setValue] = useState(initialValue);
+  const { t } = useT();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -218,22 +222,19 @@ function ChatInput({
         >
           <span aria-hidden className="mt-0.5 text-indigo-600 dark:text-indigo-400">↶</span>
           <p className="min-w-0 flex-1">
-            <span className="font-medium">Retour à ta question.</span>{" "}
+            <span className="font-medium">{t.course.rewindTitle}</span>{" "}
             <span className="opacity-70">
-              Modifie-la puis envoie :{" "}
-              {rewind.later > 2 ? `les ${rewind.later - 1} messages suivants seront remplacés` : rewind.later === 2 ? "sa réponse sera remplacée" : "elle sera remplacée"}
-              {rewind.annotations
-                ? `, avec ${rewind.annotations > 1 ? `leurs ${rewind.annotations} annotations` : "leur annotation"}`
-                : ""}
-              . Les résumés du cours ne bougent pas.
+              {t.course.rewindEdit} {t.course.rewindLater(rewind.later)}
+              {rewind.annotations ? t.course.rewindAnnotations(rewind.annotations) : ""}
+              {t.course.rewindSummaries}
             </span>
           </p>
           <button
             type="button"
             onClick={onCancelRewind}
-            className="shrink-0 rounded-lg px-2 py-0.5 font-medium text-indigo-700 hover:bg-indigo-500/10 dark:text-indigo-300"
+            className="shrink-0 rounded-lg px-2 py-0.5 font-medium text-accent-text hover:bg-accent-soft"
           >
-            Annuler
+            {t.common.cancel}
           </button>
         </div>
       )}
@@ -256,13 +257,13 @@ function ChatInput({
           rows={1}
           maxLength={4000}
           disabled={disabled}
-          placeholder={disabled ? "Ajoute un document avec + pour poser des questions" : "Pose une question sur ton cours…"}
+          placeholder={disabled ? t.course.inputDisabled : t.course.inputPlaceholder}
           className="max-h-40 min-h-10 flex-1 resize-none bg-transparent py-2 outline-none placeholder:opacity-50 [field-sizing:content]"
         />
         <button
           disabled={busy || disabled || !value.trim()}
-          aria-label="Envoyer"
-          title="Envoyer (Entrée)"
+          aria-label={t.course.send}
+          title={t.course.sendTitle}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground transition hover:bg-accent-hover disabled:bg-surface-2 disabled:text-muted"
         >
           <svg aria-hidden viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
@@ -297,6 +298,7 @@ export function Workspace({
   lolPrefs: LolPrefs;
 }) {
   const [supabase] = useState(createClient);
+  const { t } = useT();
   const [documents, setDocuments] = useState(initialDocuments);
   const [parts, setParts] = useState(initialParts);
   const [messages, setMessages] = useState(initialMessages);
@@ -337,15 +339,15 @@ export function Workspace({
   );
   const removeExchange = useCallback(async (message: MessageRow) => {
     setError(null);
-    const result = await deleteExchange(message.id).catch(() => ({ error: "Connexion perdue. Réessaie.", deleted: undefined }));
+    const result = await deleteExchange(message.id).catch(() => ({ error: t.course.connectionLost, deleted: undefined }));
     if (!result.deleted) {
-      setError(result.error ?? "Impossible de retirer ce message.");
+      setError(result.error ?? t.course.cantRemove);
       return false;
     }
     const gone = new Set(result.deleted);
     setMessages((m) => m.filter((x) => !gone.has(x.id)));
     return true;
-  }, []);
+  }, [t]);
   const cancelRewind = () => {
     setRewind(null);
     setDraft((d) => ({ key: d.key + 1, text: "" }));
@@ -483,35 +485,33 @@ export function Workspace({
         <div className="flex-1 space-y-10 py-8">
           {documents.length === 0 && (
             <div className="mx-auto max-w-md pt-10 text-center">
-              <p className="text-lg font-medium">Ajoute ton cours pour commencer</p>
+              <p className="text-lg font-medium">{t.course.emptyTitle}</p>
               <p className="mt-2 text-sm opacity-70">
-                Utilise le bouton <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-current text-xs leading-none">+</span> de
-                la barre en bas, ou glisse tes fichiers sur la page : cours, exercices, PDF, Word, PowerPoint, photos.
+                {t.course.emptyBefore}{" "}
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-current text-xs leading-none">+</span>{" "}
+                {t.course.emptyAfter}
               </p>
             </div>
           )}
 
           {ready.length > 0 && !analyzedAt && !processing && (
             <div className="card rise-in p-6 text-center">
-              <p className="font-medium">Tes documents sont prêts.</p>
-              <p className="mt-1 text-sm text-muted">
-                Ajoute tous tes fichiers (cours et exercices) avant de lancer : le résumé s&apos;appuie sur
-                l&apos;ensemble.
-              </p>
+              <p className="font-medium">{t.course.readyTitle}</p>
+              <p className="mt-1 text-sm text-muted">{t.course.readyText}</p>
               <button
                 type="button"
                 onClick={analyze}
                 disabled={busy}
                 className="btn btn-primary mt-4"
               >
-                {analyzing ? "Analyse du cours…" : "Analyser et résumer le cours"}
+                {analyzing ? t.course.analyzing : t.course.analyze}
               </button>
             </div>
           )}
 
           {processing && !analyzedAt && (
             <p className="text-center text-sm opacity-70">
-              Lecture de tes documents par l&apos;IA… Tu peux continuer à en ajouter pendant ce temps.
+              {t.course.reading}
             </p>
           )}
 
@@ -538,7 +538,7 @@ export function Workspace({
               ) : (
                 !streaming.thinking && (
                   <p className="animate-pulse opacity-60">
-                    {streaming.kind === "summary" ? "Préparation du résumé…" : "Réflexion…"}
+                    {streaming.kind === "summary" ? t.course.preparingSummary : t.course.thinking}
                   </p>
                 )
               )}
@@ -548,9 +548,7 @@ export function Workspace({
           {pendingParts.length > 0 && !streaming && (
             <div className="card p-5">
               <p className="font-medium">
-                {summarizedParts.size === 0
-                  ? `Ce cours est long : je l'ai découpé en ${parts.length} parties. Par laquelle veux-tu commencer ?`
-                  : "Pas encore résumé :"}
+                {summarizedParts.size === 0 ? t.course.partsIntro(parts.length) : t.course.notSummarized}
               </p>
               <ul className="mt-3 space-y-2">
                 {pendingParts.map((part) => (
@@ -572,7 +570,7 @@ export function Workspace({
 
 
           {error && (
-            <p role="alert" className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+            <p role="alert" className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-danger">
               {error}
             </p>
           )}
@@ -587,7 +585,7 @@ export function Workspace({
           disabled={ready.length === 0}
           busy={busy}
           onSend={ask}
-          context={`Questions sur ce cours · réponses tirées de ${ready.length > 1 ? `tes ${ready.length} documents` : "ton document"}`}
+          context={t.course.chatContext(ready.length)}
           onFiles={upload}
           onLink={addFromLink}
           uploads={uploads}

@@ -5,22 +5,12 @@ import type { Difficulty, QuestionType, StatsResponse, StudyScope } from "@/lib/
 import { QuizWorkspace } from "./quiz-workspace";
 import { Chip, Field, ScopePicker, Segmented, ToolIntro, type ScopeOptions } from "./ui";
 import { useStudyResource } from "./use-study";
+import { useT } from "@/lib/i18n/client";
 
 type QuizType = Exclude<QuestionType, "open">;
 
-const DIFFICULTIES: { value: Difficulty | "mixte"; label: string }[] = [
-  { value: "mixte", label: "Mixte" },
-  { value: "facile", label: "Facile" },
-  { value: "moyen", label: "Moyen" },
-  { value: "difficile", label: "Difficile" },
-];
-
-const TYPES: { value: QuizType; label: string }[] = [
-  { value: "single", label: "QCM" },
-  { value: "multiple", label: "Choix multiples" },
-  { value: "truefalse", label: "Vrai / faux" },
-  { value: "short", label: "Réponse courte" },
-];
+const DIFFICULTIES: (Difficulty | "mixte")[] = ["mixte", "facile", "moyen", "difficile"];
+const TYPES: QuizType[] = ["single", "multiple", "truefalse", "short"];
 
 function ConfigCard({ children, footer }: { children: React.ReactNode; footer: React.ReactNode }) {
   return (
@@ -38,50 +28,52 @@ export function QuizTool({ courseId, scopeOptions }: { courseId: string; scopeOp
   const [difficulty, setDifficulty] = useState<Difficulty | "mixte">("mixte");
   const [types, setTypes] = useState<QuizType[]>(["single", "multiple", "truefalse", "short"]);
   const [scope, setScope] = useState<StudyScope>({});
+  const { t } = useT();
+  const difficulties = DIFFICULTIES.map((value) => ({ value, label: t.study.difficulty[value] }));
 
   return (
     <>
-      <ToolIntro title="Quiz">Des questions corrigées et expliquées, avec les sources du cours.</ToolIntro>
+      <ToolIntro title={t.study.tools.quiz.label}>{t.study.quiz.intro}</ToolIntro>
       <QuizWorkspace
         courseId={courseId}
         mode="quiz"
-        historyTitle="Mes quiz"
+        historyTitle={t.study.quiz.history}
         renderConfig={(start) => (
           <ConfigCard
             footer={
               <>
-                {types.length === 0 && <span className="text-sm text-danger">Choisis au moins un type de question.</span>}
+                {types.length === 0 && <span className="text-sm text-danger">{t.study.quiz.pickType}</span>}
                 <button
                   type="button"
                   disabled={types.length === 0}
                   onClick={() => start({ mode: "quiz", count, difficulty, types, scope })}
                   className="btn btn-primary"
                 >
-                  Générer le quiz
+                  {t.study.quiz.generate}
                 </button>
               </>
             }
           >
-            <Field label="Nombre de questions">
+            <Field label={t.study.countLabel}>
               <Segmented
-                label="Nombre de questions"
+                label={t.study.countLabel}
                 value={count}
                 onChange={setCount}
                 options={[5, 10, 15, 20, 30].map((n) => ({ value: n, label: String(n) }))}
               />
             </Field>
-            <Field label="Difficulté">
-              <Segmented label="Difficulté" value={difficulty} onChange={setDifficulty} options={DIFFICULTIES} />
+            <Field label={t.study.difficultyLabel}>
+              <Segmented label={t.study.difficultyLabel} value={difficulty} onChange={setDifficulty} options={difficulties} />
             </Field>
-            <Field label="Types de questions">
+            <Field label={t.study.quiz.typesLabel}>
               <div className="flex flex-wrap gap-2">
-                {TYPES.map((t) => (
+                {TYPES.map((type) => (
                   <Chip
-                    key={t.value}
-                    checked={types.includes(t.value)}
-                    onChange={(on) => setTypes((list) => (on ? [...list, t.value] : list.filter((x) => x !== t.value)))}
+                    key={type}
+                    checked={types.includes(type)}
+                    onChange={(on) => setTypes((list) => (on ? [...list, type] : list.filter((x) => x !== type)))}
                   >
-                    {t.label}
+                    {t.study.quiz.types[type]}
                   </Chip>
                 ))}
               </div>
@@ -101,54 +93,50 @@ export function ExamTool({ courseId, scopeOptions }: { courseId: string; scopeOp
   const [count, setCount] = useState(10);
   const [difficulty, setDifficulty] = useState<Difficulty | "mixte">("mixte");
   const [scope, setScope] = useState<StudyScope>({});
+  const { t } = useT();
+  const difficulties = DIFFICULTIES.map((value) => ({ value, label: t.study.difficulty[value] }));
 
   return (
     <>
-      <ToolIntro title="Examen blanc">
-        Un sujet complet en temps limité, avec des questions ouvertes notées selon un barème. À la fin du temps, ta
-        copie est remise automatiquement.
-      </ToolIntro>
+      <ToolIntro title={t.study.tools.examen.label}>{t.study.exam.intro}</ToolIntro>
       <QuizWorkspace
         courseId={courseId}
         mode="exam"
-        historyTitle="Mes examens blancs"
-        generatingHint="Clarity rédige ton sujet et son barème à partir du cours. Le chrono ne démarre qu'une fois le sujet prêt."
+        historyTitle={t.study.exam.history}
+        generatingHint={t.study.exam.generatingHint}
         renderConfig={(start) => (
           <ConfigCard
             footer={
               <>
-                <span className="mr-auto text-sm text-muted">Le chrono démarre dès que le sujet est prêt.</span>
+                <span className="mr-auto text-sm text-muted">{t.study.exam.timerNote}</span>
                 <button
                   type="button"
                   onClick={() => start({ mode: "exam", durationMinutes: duration, count, difficulty, scope })}
                   className="btn btn-primary"
                 >
-                  Lancer l&apos;examen
+                  {t.study.exam.start}
                 </button>
               </>
             }
           >
-            <Field label="Durée">
+            <Field label={t.study.exam.duration}>
               <Segmented
-                label="Durée"
+                label={t.study.exam.duration}
                 value={duration}
                 onChange={setDuration}
-                options={[15, 30, 60, 90, 120, 180].map((m) => ({
-                  value: m,
-                  label: m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60}` : ""}`,
-                }))}
+                options={[15, 30, 60, 90, 120, 180].map((m) => ({ value: m, label: t.study.exam.durationValue(m) }))}
               />
             </Field>
-            <Field label="Nombre de questions" hint="dont environ un tiers de questions ouvertes">
+            <Field label={t.study.countLabel} hint={t.study.exam.countHint}>
               <Segmented
-                label="Nombre de questions"
+                label={t.study.countLabel}
                 value={count}
                 onChange={setCount}
                 options={[6, 10, 15, 20].map((n) => ({ value: n, label: String(n) }))}
               />
             </Field>
-            <Field label="Difficulté">
-              <Segmented label="Difficulté" value={difficulty} onChange={setDifficulty} options={DIFFICULTIES} />
+            <Field label={t.study.difficultyLabel}>
+              <Segmented label={t.study.difficultyLabel} value={difficulty} onChange={setDifficulty} options={difficulties} />
             </Field>
             <ScopePicker options={scopeOptions} value={scope} onChange={setScope} />
           </ConfigCard>
@@ -163,17 +151,16 @@ export function ExamTool({ courseId, scopeOptions }: { courseId: string; scopeOp
 export function QuickTestTool({ courseId }: { courseId: string }) {
   const stats = useStudyResource<StatsResponse>(courseId, "/stats");
   const weak = stats.data?.weakConcepts ?? [];
+  const { t } = useT();
 
   return (
     <>
-      <ToolIntro title="Test rapide">
-        Cinq questions, deux minutes, résultat immédiat. Clarity cible en priorité les notions où tu as le plus de mal.
-      </ToolIntro>
+      <ToolIntro title={t.study.tools["test-rapide"].label}>{t.study.quick.intro}</ToolIntro>
       <QuizWorkspace
         courseId={courseId}
         mode="quick"
-        historyTitle="Derniers tests"
-        generatingHint="Cinq questions sur tes notions fragiles arrivent : quelques secondes."
+        historyTitle={t.study.quick.history}
+        generatingHint={t.study.quick.generatingHint}
         renderConfig={(start) => (
           <div className="card rise-in relative isolate overflow-hidden p-8 text-center">
             <div
@@ -186,7 +173,7 @@ export function QuickTestTool({ courseId }: { courseId: string }) {
               </svg>
             </div>
             <p className="mt-4 text-sm text-muted">
-              {weak.length > 0 ? "Notions ciblées en priorité :" : "Pas encore de notion fragile repérée : test général sur tout le cours."}
+              {weak.length > 0 ? t.study.quick.targeted : t.study.quick.general}
             </p>
             {weak.length > 0 && (
               <div className="mt-3 flex flex-wrap justify-center gap-1.5">
@@ -198,7 +185,7 @@ export function QuickTestTool({ courseId }: { courseId: string }) {
               </div>
             )}
             <button type="button" onClick={() => start({ mode: "quick", targetWeak: true })} className="btn btn-primary mt-6 px-6 py-2.5">
-              Lancer le test · 5 questions
+              {t.study.quick.start}
             </button>
           </div>
         )}

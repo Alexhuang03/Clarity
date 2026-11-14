@@ -6,6 +6,7 @@ import { dbError, enforceStudyLimit, scopeSchema, type Session } from "./http";
 import { generateJson, StudyError } from "./llm";
 import { knownConcepts, recordConceptEvents } from "./mastery";
 import { conceptsBlock, flashcardsPrompt } from "./prompts";
+import { STUDY_TEXTS } from "./texts";
 import { dueDate, nextState, previewIntervals, RATING_SCORE } from "./srs";
 import type {
   CreateCardRequest,
@@ -148,7 +149,7 @@ export const listDecks = (session: Session, dueBefore?: Date) => deckSummaries(s
 
 const cardsSchema = (count: number) =>
   v.object({
-    title: v.lenient(v.string({ max: 150 }), "Flashcards"),
+    title: v.lenient(v.string({ max: 150 }), ""),
     cards: v.array(
       v.object({
         front: v.string({ min: 2, max: FRONT_MAX }),
@@ -178,7 +179,7 @@ export async function createDeck(
     const { value } = await generateJson(
       modelChain("study"),
       {
-        system: flashcardsPrompt(count, known.length > 0),
+        system: flashcardsPrompt(count, known.length > 0, ctx.locale),
         user: [conceptsBlock({ known }), content.block].filter(Boolean).join("\n\n"),
         maxTokens: Math.min(12_000, 1000 + count * 220),
         temperature: 0.5,
@@ -187,7 +188,7 @@ export async function createDeck(
       cardsSchema(count),
       "génération flashcards",
     );
-    title ??= value.title;
+    title ??= value.title || STUDY_TEXTS[ctx.locale].deckTitle;
     const seen = new Set<string>();
     cards = value.cards
       .filter((c) => !seen.has(c.front.toLowerCase()) && seen.add(c.front.toLowerCase()))
@@ -201,7 +202,7 @@ export async function createDeck(
 
   const { data: deck, error } = await supabase
     .from("study_decks")
-    .insert({ user_id: userId, course_id: courseId, title: (title || "Nouveau paquet").slice(0, 200) })
+    .insert({ user_id: userId, course_id: courseId, title: (title || STUDY_TEXTS[ctx.locale].newDeck).slice(0, 200) })
     .select("id")
     .single();
   if (error || !deck) dbError(error);

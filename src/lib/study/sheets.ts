@@ -4,7 +4,9 @@ import type { Source } from "@/lib/course/sources";
 import { loadScopedContent, pickSources, type CourseContext } from "./content";
 import { dbError, enforceStudyLimit, scopeSchema, type Session } from "./http";
 import { generateJson, StudyError } from "./llm";
+import type { Locale } from "@/lib/i18n/config";
 import { sheetPrompt } from "./prompts";
+import { STUDY_TEXTS } from "./texts";
 import type { CreateSheetRequest, Sheet, SheetData, SheetSummary, StudyScope } from "./types";
 import { fixLatexEscapes, parse, v, type Schema } from "./validate";
 
@@ -21,7 +23,7 @@ const item = <S extends Record<string, Schema<unknown>>>(shape: S) => v.array(v.
 const t = (max: number) => v.string({ max });
 
 const sheetSchema = v.object({
-  title: v.lenient(t(150), "Fiche de révision"),
+  title: v.lenient(t(150), ""),
   summary: v.string({ min: 20, max: 3000 }),
   keyConcepts: v.refine(item({ term: t(150), explanation: t(1500) }), (a) => (a.length ? null : "aucune notion clé")),
   definitions: v.lenient(item({ term: t(150), definition: t(1500) }), []),
@@ -51,17 +53,18 @@ const toSummary = (s: Omit<SheetRow, "data" | "content" | "model">): SheetSummar
 const toSheet = (s: SheetRow): Sheet => ({ ...toSummary(s), data: s.data, content: s.content, model: s.model });
 
 /** Fiche structurée → markdown (formules entre $...$, rendues par KaTeX côté interface). */
-export function sheetMarkdown(d: SheetData): string {
-  const out: string[] = [`# ${d.title}`, "", "## En bref", "", d.summary];
-  if (d.keyConcepts.length) out.push("", "## Notions clés", "", ...d.keyConcepts.map((c) => `- **${c.term}** : ${c.explanation}`));
-  if (d.definitions.length) out.push("", "## Définitions", "", ...d.definitions.map((c) => `- **${c.term}** : ${c.definition}`));
+export function sheetMarkdown(d: SheetData, locale: Locale): string {
+  const h = STUDY_TEXTS[locale].sheet;
+  const out: string[] = [`# ${d.title}`, "", `## ${h.summary}`, "", d.summary];
+  if (d.keyConcepts.length) out.push("", `## ${h.keyConcepts}`, "", ...d.keyConcepts.map((c) => `- **${c.term}** : ${c.explanation}`));
+  if (d.definitions.length) out.push("", `## ${h.definitions}`, "", ...d.definitions.map((c) => `- **${c.term}** : ${c.definition}`));
   if (d.formulas.length) {
-    out.push("", "## Formules", "");
+    out.push("", `## ${h.formulas}`, "");
     for (const f of d.formulas) out.push(`- **${f.name}** : $${f.latex}$${f.explanation ? `  \n  ${f.explanation}` : ""}`);
   }
-  if (d.pitfalls.length) out.push("", "## Pièges à éviter", "", ...d.pitfalls.map((p) => `- ${p}`));
+  if (d.pitfalls.length) out.push("", `## ${h.pitfalls}`, "", ...d.pitfalls.map((p) => `- ${p}`));
   if (d.sources.length) {
-    out.push("", "## Sources", "", ...d.sources.map((s) => `- ${s.filename}${s.page ? `, page ${s.page}` : ""}${s.section ? ` — ${s.section}` : ""}`));
+    out.push("", `## ${h.sources}`, "", ...d.sources.map((s) => `- ${s.filename}${s.page ? `, ${h.page(s.page)}` : ""}${s.section ? ` — ${s.section}` : ""}`));
   }
   return out.join("\n");
 }
@@ -71,13 +74,13 @@ async function generate(session: Session & { ctx: CourseContext }, scope: StudyS
   await enforceStudyLimit(session.userId);
   const { value, model } = await generateJson(
     modelChain("study"),
-    { system: sheetPrompt(), user: content.block, maxTokens: 8192, temperature: 0.3, beforeRetry: () => enforceStudyLimit(session.userId) },
+    { system: sheetPrompt(session.ctx.locale), user: content.block, maxTokens: 8192, temperature: 0.3, beforeRetry: () => enforceStudyLimit(session.userId) },
     sheetSchema,
     "fiche de révision",
   );
   const fix = (s: string) => fixLatexEscapes(s);
   const data: SheetData = {
-    title: value.title,
+    title: value.title || STUDY_TEXTS[session.ctx.locale].sheetTitle,
     summary: fix(value.summary),
     keyConcepts: value.keyConcepts.map((c) => ({ term: fix(c.term), explanation: fix(c.explanation) })),
     definitions: value.definitions.map((c) => ({ term: fix(c.term), definition: fix(c.definition) })),
@@ -104,7 +107,7 @@ export async function createSheet(session: Session & { ctx: CourseContext }, bod
       title: data.title.slice(0, 200),
       scope,
       data,
-      content: sheetMarkdown(data),
+      content: sheetMarkdown(data, session.ctx.locale),
       model,
     })
     .select(COLUMNS)
@@ -122,7 +125,7 @@ export async function regenerateSheet(session: Session & { ctx: CourseContext },
   data.title = existing.title;
   const { data: row, error } = await session.supabase
     .from("study_sheets")
-    .update({ data, content: sheetMarkdown(data), model, updated_at: new Date().toISOString() })
+    .update({ data, content: sheetMarkdown(data, session.ctx.locale), model, updated_at: new Date().toISOString() })
     .eq("id", sheetId)
     .select(COLUMNS)
     .single();

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { useT } from "@/lib/i18n/client";
 import { createCourse } from "./courses/actions";
 
 const inputClass = "field";
@@ -8,6 +9,7 @@ const inputClass = "field";
 /** Dernière case de la grille : une tuile « Nouveau cours » qui s'ouvre en formulaire. */
 export function NewCourseForm({ subjects }: { subjects: string[] }) {
   const [open, setOpen] = useState(false);
+  const { t } = useT();
   const [state, formAction, pending] = useActionState(createCourse, { error: null });
 
   if (!open) {
@@ -21,7 +23,7 @@ export function NewCourseForm({ subjects }: { subjects: string[] }) {
           <span className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-xl leading-none shadow-card transition group-hover:scale-105 group-hover:border-accent/40">
             +
           </span>
-          Nouveau cours
+          {t.dashboard.newCourse}
         </button>
       </li>
     );
@@ -36,19 +38,19 @@ export function NewCourseForm({ subjects }: { subjects: string[] }) {
       >
         <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
           <label className="space-y-1.5">
-            <span className="text-sm text-muted">Titre</span>
+            <span className="text-sm text-muted">{t.dashboard.titleLabel}</span>
             <input
               name="title"
               required
               autoFocus
               maxLength={120}
-              placeholder="Ex. Probabilités – chapitre 3"
+              placeholder={t.dashboard.titlePlaceholder}
               className={inputClass}
             />
           </label>
           <label className="space-y-1.5">
-            <span className="text-sm text-muted">Matière (facultatif)</span>
-            <input name="subject" list="subjects" maxLength={60} placeholder="Ex. Maths" className={inputClass} />
+            <span className="text-sm text-muted">{t.dashboard.subjectOptional}</span>
+            <input name="subject" list="subjects" maxLength={60} placeholder={t.dashboard.subjectPlaceholder} className={inputClass} />
             <datalist id="subjects">
               {subjects.map((s) => (
                 <option key={s} value={s} />
@@ -61,14 +63,14 @@ export function NewCourseForm({ subjects }: { subjects: string[] }) {
             disabled={pending}
             className="btn btn-primary"
           >
-            {pending ? "Création…" : "Créer le cours"}
+            {pending ? t.dashboard.creating : t.dashboard.createCourse}
           </button>
           <button
             type="button"
             onClick={() => setOpen(false)}
             className="btn btn-ghost"
           >
-            Annuler
+            {t.common.cancel}
           </button>
           {state.error && <p className="ml-auto text-sm text-danger">{state.error}</p>}
         </div>

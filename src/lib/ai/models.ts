@@ -28,8 +28,10 @@ const CHAINS: Record<"summary" | "chat" | "light" | "analysis" | "vision" | "fig
   analysis: ["groq:openai/gpt-oss-20b", "groq:openai/gpt-oss-120b", FLASH_LITE[0]],
   // Petites tâches sans urgence (titres des parties...)
   light: [FLASH_LITE[0], "groq:openai/gpt-oss-20b", FLASH_LITE[1], FLASH[0]],
-  // Lecture des PDF et des images (multimodal : Gemini uniquement)
-  vision: [...FLASH, FLASH_LITE[0]],
+  // Lecture des PDF et des images (multimodal : Gemini uniquement). Flash-Lite d'abord : transcrire ne demande
+  // pas de raisonnement, et un PDF de 100 pages = 20 requêtes, soit tout le quota quotidien gratuit d'un modèle Flash.
+  // Avant, la lecture épuisait Flash et les résumés (qui en ont besoin) retombaient sur Flash-Lite.
+  vision: [FLASH_LITE[0], FLASH_LITE[1], FLASH[0], FLASH[1], FLASH[2]],
   // Description des schémas d'un cours en ligne : Flash-Lite suffit, et préserve le quota gratuit
   // de Flash (20 requêtes par jour seulement), réservé aux résumés
   figures: [...FLASH_LITE, FLASH[1]],

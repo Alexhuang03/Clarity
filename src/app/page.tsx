@@ -7,6 +7,7 @@ import { Logo } from "@/components/ui/logo";
 import { PageSlide } from "@/components/ui/page-slide";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { getCurrentUser } from "@/lib/auth";
+import { getT } from "@/lib/i18n/server";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "./actions";
 import { CourseCard } from "./course-card";
@@ -42,18 +43,19 @@ export default function Home() {
 
 async function UserMenu() {
   const user = await getCurrentUser();
+  const { t } = await getT();
   return (
     <div className="flex items-center gap-1 text-sm">
       {/* Sur mobile, la déconnexion se fait depuis « Mon compte » */}
       <form action={signOut} className="hidden sm:block">
         <button className="btn btn-ghost px-3 py-1.5 font-normal">
-          Se déconnecter
+          {t.common.signOut}
         </button>
       </form>
       <Link
         href="/account"
-        title={`Mon compte (${user.email})`}
-        aria-label="Mon compte"
+        title={t.dashboard.accountTitle(user.email)}
+        aria-label={t.common.myAccount}
         className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-surface text-xs font-semibold uppercase shadow-card transition hover:border-line-strong"
       >
         {user.email.charAt(0) || "?"}
@@ -64,6 +66,7 @@ async function UserMenu() {
 
 async function Courses() {
   await getCurrentUser();
+  const { t } = await getT();
   const supabase = await createClient();
   const [{ data: courses }, { data: subjects }] = await Promise.all([
     supabase
@@ -84,26 +87,25 @@ async function Courses() {
     <>
       <div className="mb-10 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="eyebrow mb-3">Tableau de bord</p>
+          <p className="eyebrow mb-3">{t.dashboard.eyebrow}</p>
           <BlurText
+            key={t.dashboard.title}
             as="h1"
-            text="Mes cours"
+            text={t.dashboard.title}
             trigger="load"
             delay={90}
             distance={18}
             className="text-4xl font-semibold tracking-tight sm:text-5xl"
           />
           <p className="mt-3 max-w-md text-muted">
-            {count === 0
-              ? "Crée ton premier cours et ajoute tes fichiers : l'IA en fera un résumé clair, pas à pas."
-              : "Reprends là où tu t'étais arrêté, ou ajoute un nouveau cours."}
+            {count === 0 ? t.dashboard.introEmpty : t.dashboard.intro}
           </p>
         </div>
         {count > 0 && (
           <dl className="flex gap-8 sm:gap-10">
-            <Stat value={count} label="cours" />
-            <Stat value={subjectNames.length} label={subjectNames.length > 1 ? "matières" : "matière"} />
-            <Stat value={documentTotal} label={documentTotal > 1 ? "documents" : "document"} />
+            <Stat value={count} label={t.dashboard.statCourses(count)} />
+            <Stat value={subjectNames.length} label={t.dashboard.statSubjects(subjectNames.length)} />
+            <Stat value={documentTotal} label={t.dashboard.statDocuments(documentTotal)} />
           </dl>
         )}
       </div>

@@ -7,10 +7,12 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import ShinyText from "@/components/reactbits/ShinyText";
 import { useTheme } from "@/components/ui/use-theme";
+import { useT } from "@/lib/i18n/client";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 
-function formatDuration(ms: number) {
+function formatDuration(ms: number, t: Dictionary) {
   const seconds = Math.round(ms / 1000);
-  return seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
+  return seconds < 60 ? t.course.seconds(seconds) : t.course.minutes(Math.floor(seconds / 60), seconds % 60);
 }
 
 /**
@@ -32,15 +34,14 @@ export function ThinkingPanel({
   const open = userChoice ?? live;
   const body = useRef<HTMLDivElement>(null);
   const dark = useTheme() === "dark";
+  const { t } = useT();
 
   // Pendant la réflexion, on suit le texte qui s'écrit
   useEffect(() => {
     if (live && open && body.current) body.current.scrollTop = body.current.scrollHeight;
   }, [text, live, open]);
 
-  const label = live
-    ? "Réflexion en cours…"
-    : `Réflexion du modèle${durationMs ? ` · ${formatDuration(durationMs)}` : ""}`;
+  const label = live ? t.course.thinkingLive : t.course.thinkingDone(durationMs ? formatDuration(durationMs, t) : "");
 
   return (
     <div className="mb-4 rounded-xl border border-line bg-surface-2/50">
@@ -66,7 +67,7 @@ export function ThinkingPanel({
         ) : (
           <span className="font-medium text-muted">{label}</span>
         )}
-        <span className="ml-auto text-xs text-muted">{open ? "Masquer" : "Afficher"}</span>
+        <span className="ml-auto text-xs text-muted">{open ? t.common.hide : t.common.show}</span>
       </button>
       {open && (
         <div
@@ -74,7 +75,7 @@ export function ThinkingPanel({
           className="prose prose-sm prose-neutral max-h-72 max-w-none overflow-y-auto border-t border-line px-4 py-3 opacity-75 dark:prose-invert prose-p:my-2 prose-headings:text-sm"
         >
           <p className="!mt-0 text-xs italic opacity-60">
-            Raisonnement interne du modèle (souvent rédigé en anglais).
+            {t.course.thinkingNote}
           </p>
           {/* Les repères de sources [S2] n'ont pas de sens dans la réflexion : on les retire */}
           <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>

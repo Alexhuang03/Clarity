@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { motion } from "motion/react";
+import { useT } from "@/lib/i18n/client";
 import { STUDY_TOOLS } from "./tools";
 
 /**
@@ -13,12 +14,16 @@ import { STUDY_TOOLS } from "./tools";
 export function StudyNav() {
   const { id } = useParams<{ id: string }>();
   const pathname = usePathname();
+  const { t } = useT();
   const base = `/courses/${id}/study`;
-  const tabs = [{ href: base, label: "Vue d'ensemble" }, ...STUDY_TOOLS.map((t) => ({ href: `${base}/${t.slug}`, label: t.label }))];
+  const tabs = [
+    { href: base, label: t.study.overview },
+    ...STUDY_TOOLS.map((tool) => ({ href: `${base}/${tool.slug}`, label: t.study.tools[tool.slug].label })),
+  ];
 
   return (
     <nav
-      aria-label="Outils de révision"
+      aria-label={t.study.navLabel}
       className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       <ul className="flex w-max gap-1 pb-3">

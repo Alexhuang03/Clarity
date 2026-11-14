@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { HIGHLIGHT_COLORS, HIGHLIGHT_SWATCH, type HighlightColor } from "@/lib/annotations/types";
 import { pingIconUrl, type PingAction, type PingDef } from "@/lib/annotations/lol";
+import { useT } from "@/lib/i18n/client";
 
 // Roues de pings et d'émotes, reprises de lolPing (MIT) : on maintient le déclencheur
 // (clic droit, Alt ou Ctrl), on glisse vers une part, on relâche.
@@ -12,18 +13,11 @@ export type WheelHit = { index: number; color?: HighlightColor };
 
 export const PING_ORDER: PingAction[] = ["question", "understanding", "error", "highlight"];
 
-export const PING_LABELS: Record<PingAction, string> = {
-  question: "Poser une question",
-  understanding: "Ce que j'ai compris",
-  error: "Signaler une erreur",
-  highlight: "Surligner",
-};
-
-/** Parts de la roue de pings, avec le ping choisi pour chaque action. */
-export const buildPingItems = (pings: Record<PingAction, PingDef>): WheelItem[] =>
+/** Parts de la roue de pings, avec le ping choisi pour chaque action (labels : t.annotations.action). */
+export const buildPingItems = (pings: Record<PingAction, PingDef>, labels: Record<PingAction, string>): WheelItem[] =>
   PING_ORDER.map((action) => ({
     key: action,
-    label: PING_LABELS[action],
+    label: labels[action],
     icon: pingIconUrl(pings[action].icon),
     color: pings[action].color,
   }));
@@ -87,6 +81,7 @@ export function Wheel({
   onHover: (hit: WheelHit | null) => void;
   footer?: React.ReactNode;
 }) {
+  const { t } = useT();
   const { size, outer, icon } = geometry(items.length);
   const c = size / 2;
   const n = items.length;
@@ -105,7 +100,7 @@ export function Wheel({
   // La roue reste entièrement visible près des bords de l'écran
   const left = Math.min(Math.max(x, c), window.innerWidth - c);
   const top = Math.min(Math.max(y, c), window.innerHeight - c);
-  const label = hit ? items[hit.index].label : interactive ? "Choisis" : "Annuler";
+  const label = hit ? items[hit.index].label : interactive ? t.annotations.wheelChoose : t.annotations.wheelCancel;
 
   return (
     <div
@@ -181,7 +176,7 @@ export function Wheel({
                 className={interactive ? "cursor-pointer" : undefined}
                 style={{ transition: "r 80ms" }}
                 role="menuitem"
-                aria-label={`Surligner en ${color}`}
+                aria-label={t.annotations.highlightIn(t.annotations.colors[color] ?? color)}
                 onPointerEnter={() => interactive && onHover({ index: colorSlice, color })}
                 onClick={() => interactive && onPick({ index: colorSlice, color })}
               />

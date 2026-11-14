@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { StudyNav, StudyNavSkeleton } from "@/components/study/study-nav";
 import { PageSlide } from "@/components/ui/page-slide";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { getT } from "@/lib/i18n/server";
 
 /**
  * Espace « Réviser » d'un cours : barre (retour au cours, titre, onglets des outils) commune à
@@ -50,6 +51,7 @@ async function StudyTitle({ params }: { params: Promise<{ id: string }> }) {
     .eq("id", id)
     .maybeSingle();
   if (!course) notFound();
+  const { t } = await getT();
   const subject = (course.subject as unknown as { name: string } | null)?.name;
 
   return (
@@ -57,14 +59,14 @@ async function StudyTitle({ params }: { params: Promise<{ id: string }> }) {
       <Link
         href={`/courses/${id}`}
         transitionTypes={["nav-back"]}
-        aria-label="Retour au cours"
+        aria-label={t.study.backToCourse}
         className="btn btn-ghost shrink-0 px-2.5 py-1.5"
       >
         <span aria-hidden>←</span>
-        <span className="hidden sm:inline">Cours</span>
+        <span className="hidden sm:inline">{t.study.course}</span>
       </Link>
       <div className="min-w-0 border-l border-line pl-3">
-        <p className="eyebrow truncate">Réviser{subject ? ` · ${subject}` : ""}</p>
+        <p className="eyebrow truncate">{t.study.eyebrow(subject)}</p>
         <h1 className="truncate text-base font-semibold sm:text-lg" title={course.title}>
           {course.title}
         </h1>

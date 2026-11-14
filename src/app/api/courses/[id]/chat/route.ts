@@ -1,6 +1,7 @@
 import { modelChain } from "@/lib/ai/models";
 import type { ChatMessage } from "@/lib/ai/providers";
 import { loadCourseContext } from "@/lib/course/context";
+import type { Locale } from "@/lib/course/language";
 import { applicationPrompt, chatPrompt, greetingPrompt, offTopicPrompt } from "@/lib/course/prompts";
 import { searchCourse as searchInCourse } from "@/lib/course/retrieve";
 import { finalizeCitations, formatSources, numberSources } from "@/lib/course/sources";
@@ -17,12 +18,26 @@ const HISTORY = 6;
 const HISTORY_MESSAGE_MAX = 1500;
 const MAX_SOURCES = 6;
 
-const INTENT_LABEL: Record<Intent, string> = {
-  cours: "question sur le cours",
-  etudes: "question d'études générale",
-  application: "question sur Clarity",
-  salutation: "salutation",
-  hors_sujet: "hors sujet",
+// Analyse affichée dans le panneau « Réflexion », dans la langue de l'utilisateur
+const ANALYSIS_TEXT: Record<Locale, { title: string; rule: string; understood: string; intents: Record<Intent, string> }> = {
+  fr: {
+    title: "Analyse de la question",
+    rule: " (reconnue sans IA)",
+    understood: "Question comprise",
+    intents: { cours: "question sur le cours", etudes: "question d'études générale", application: "question sur Clarity", salutation: "salutation", hors_sujet: "hors sujet" },
+  },
+  en: {
+    title: "Question analysis",
+    rule: " (recognised without AI)",
+    understood: "Question understood as",
+    intents: { cours: "question about the course", etudes: "general study question", application: "question about Clarity", salutation: "greeting", hors_sujet: "off topic" },
+  },
+  zh: {
+    title: "问题分析",
+    rule: "（无需 AI 识别）",
+    understood: "理解为",
+    intents: { cours: "关于课程的问题", etudes: "一般学习问题", application: "关于 Clarity 的问题", salutation: "问候", hors_sujet: "与学习无关" },
+  },
 };
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -88,8 +103,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const understood = quick ?? (await understandQuestion(question, history, ctx.course.title));
     const tAnalysis = Date.now();
     const reformulated = understood.question !== question;
-    const analysis = `**Analyse de la question** : ${INTENT_LABEL[understood.intent]}${quick ? " (reconnue sans IA)" : ""}${
-      reformulated ? `\n\nQuestion comprise : « ${understood.question} »` : ""
+    const label = ANALYSIS_TEXT[ctx.locale];
+    const analysis = `**${label.title}** : ${label.intents[understood.intent]}${quick ? label.rule : ""}${
+      reformulated ? `\n\n${label.understood} : « ${understood.question} »` : ""
     }\n\n`;
 
     // 2. Réponse adaptée à la catégorie
@@ -106,7 +122,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       chunks ??= await searchCourse(understood.search);
       sources = numberSources(chunks, ctx.documents);
 
-      system = chatPrompt(ctx.level);
+      system = chatPrompt(ctx.level, ctx.locale);
       // La question d'abord (et rappelée à la fin) : elle ne doit jamais être noyée sous les extraits
       messages = [
         ...history,
@@ -127,10 +143,10 @@ ${untrusted("QUESTION", question)}`,
       // Pas besoin du cours : réponse courte, sans extraits ni historique
       system =
         understood.intent === "application"
-          ? applicationPrompt()
+          ? applicationPrompt(ctx.locale)
           : understood.intent === "salutation"
-            ? greetingPrompt(ctx.course.title)
-            : offTopicPrompt(ctx.course.title);
+            ? greetingPrompt(ctx.course.title, ctx.locale)
+            : offTopicPrompt(ctx.course.title, ctx.locale);
       messages = [{ role: "user", content: question }];
     }
 

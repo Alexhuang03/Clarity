@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { getT } from "@/lib/i18n/server";
 import { NoDocuments } from "@/components/study/no-documents";
 import { FlashcardsTool } from "@/components/study/flashcards-tool";
 import { loadScopeOptions, ToolSkeleton } from "../scope-options";
 
-export const metadata: Metadata = { title: "Flashcards · Clarity" };
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT();
+  return { title: `${t.study.tools["flashcards"].label} · Clarity` };
+}
 
 export default function FlashcardsPage({ params }: { params: Promise<{ id: string }> }) {
   return (

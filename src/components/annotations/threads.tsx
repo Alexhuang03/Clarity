@@ -6,14 +6,8 @@ import { readStream } from "@/lib/course/read-stream";
 import { pingIconUrl, type PingDef } from "@/lib/annotations/lol";
 import type { AnnotationRow, ThreadKind, ThreadMessage } from "@/lib/annotations/types";
 import { extractVerdict, isPartialVerdict, verdictBadge, type Verdict } from "@/lib/annotations/verdict";
-
-export const KIND_LABEL: Record<AnnotationRow["kind"], string> = {
-  highlight: "Surlignage",
-  question: "Question",
-  understanding: "Ce que j'ai compris",
-  error: "Erreur signalée",
-  reaction: "Réaction",
-};
+import { useT } from "@/lib/i18n/client";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 
 /** Réponse de l'IA en cours de génération pour une annotation. */
 export type Pending = { text: string; running: boolean; userText?: string; error?: string };
@@ -25,6 +19,7 @@ export type Pending = { text: string; running: boolean; userText?: string; error
 export function useThreadRunner(setAnnotations: React.Dispatch<React.SetStateAction<AnnotationRow[]>>) {
   const [pending, setPending] = useState<Record<string, Pending>>({});
   const running = useRef(new Set<string>());
+  const connectionLost = useT().t.course.connectionLost;
 
   /** content : message de l'étudiant (suite de la discussion). Renvoie false en cas d'échec. */
   const run = useCallback(
@@ -58,7 +53,7 @@ export function useThreadRunner(setAnnotations: React.Dispatch<React.SetStateAct
           }
         });
       } catch {
-        outcome.error = "Connexion perdue. Réessaie.";
+        outcome.error = connectionLost;
       } finally {
         running.current.delete(id);
       }
@@ -74,7 +69,7 @@ export function useThreadRunner(setAnnotations: React.Dispatch<React.SetStateAct
       });
       return true;
     },
-    [setAnnotations],
+    [setAnnotations, connectionLost],
   );
 
   return { pending, run };
@@ -91,9 +86,9 @@ export function awaitsAnswer(a: AnnotationRow) {
 }
 
 /** Ce que l'étudiant a écrit en ouvrant le fil. */
-export function openingText(a: AnnotationRow) {
+export function openingText(a: AnnotationRow, t: Dictionary) {
   if (a.kind === "question") return threadOf(a)[0]?.content ?? "";
-  return a.note ?? (a.kind === "error" ? "Signalé comme faux, à revérifier." : "");
+  return a.note ?? (a.kind === "error" ? t.annotations.flaggedWrong : "");
 }
 
 /** Texte brut court d'une réponse Markdown (aperçu d'une bulle repliée). */
@@ -116,12 +111,18 @@ const TONES = {
 };
 
 function VerdictBadge({ kind, verdict }: { kind: ThreadKind; verdict: Verdict | null | undefined }) {
+  const { t } = useT();
   if (!verdict || kind === "question") return null;
   const badge = verdictBadge(kind, verdict);
-  return <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[0.65rem] font-semibold ${TONES[badge.tone]}`}>{badge.label}</span>;
+  return (
+    <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[0.65rem] font-semibold ${TONES[badge.tone]}`}>
+      {t.annotations.verdict[kind][verdict]}
+    </span>
+  );
 }
 
 function Thinking() {
+  const { t } = useT();
   return (
     <span className="inline-flex items-center gap-1.5 text-xs opacity-60">
       <span className="flex gap-0.5">
@@ -129,7 +130,7 @@ function Thinking() {
           <span key={i} className="h-1.5 w-1.5 animate-bounce rounded-full bg-current" style={{ animationDelay: `${i * 120}ms` }} />
         ))}
       </span>
-      Clarity réfléchit…
+      {t.annotations.thinking}
     </span>
   );
 }
@@ -137,7 +138,7 @@ function Thinking() {
 function UserLine({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex justify-end">
-      <p className="max-w-[90%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-indigo-600 px-3 py-1.5 text-sm text-white">{children}</p>
+      <p className="max-w-[90%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-accent px-3 py-1.5 text-sm text-accent-foreground">{children}</p>
     </div>
   );
 }
@@ -172,6 +173,7 @@ export function ThreadView({
   const shown = isPartialVerdict(live) ? { verdict: null, content: "" } : extractVerdict(live);
   const waiting = !running && awaitsAnswer(annotation);
   const temporary = annotation.id.startsWith("tmp-");
+  const { t } = useT();
 
   // Suit la fin de la discussion pendant que la réponse s'écrit
   useEffect(() => {
@@ -188,9 +190,9 @@ export function ThreadView({
   const done = annotation.status !== "open";
   const statusButton =
     kind === "question"
-      ? { label: done ? "✓ Compris" : "J'ai compris", next: done ? "open" : "understood" }
+      ? { label: done ? t.annotations.understoodDone : t.annotations.understood, next: done ? "open" : "understood" }
       : kind === "error"
-        ? { label: done ? "✓ Traité" : "Marquer traité", next: done ? "open" : "resolved" }
+        ? { label: done ? t.annotations.resolved : t.annotations.resolve, next: done ? "open" : "resolved" }
         : null;
 
   return (
@@ -199,12 +201,12 @@ export function ThreadView({
         {/* eslint-disable-next-line @next/next/no-img-element -- icône du ping */}
         <img src={pingIconUrl(ping.icon)} alt="" className="h-5 w-5" />
         <span className="truncate whitespace-nowrap text-xs font-semibold uppercase tracking-wide" style={{ color: ping.color }}>
-          {KIND_LABEL[kind]}
+          {t.annotations.kind[kind]}
         </span>
         <VerdictBadge kind={kind} verdict={shown.verdict ?? annotation.verdict} />
         <span className="flex-1" />
         {onClose && (
-          <button type="button" onClick={onClose} className="rounded px-1 text-sm opacity-50 hover:opacity-100" aria-label="Fermer">
+          <button type="button" onClick={onClose} className="rounded px-1 text-sm opacity-50 hover:opacity-100" aria-label={t.common.close}>
             ✕
           </button>
         )}
@@ -215,7 +217,7 @@ export function ThreadView({
       </blockquote>
 
       <div ref={list} className="-mx-1 mt-2 min-h-0 flex-1 space-y-2.5 overflow-y-auto px-1 pb-1">
-        {kind !== "question" && <UserLine>{openingText(annotation)}</UserLine>}
+        {kind !== "question" && <UserLine>{openingText(annotation, t)}</UserLine>}
         {thread.map((m) =>
           m.role === "user" ? (
             <UserLine key={m.id}>{m.content}</UserLine>
@@ -229,10 +231,10 @@ export function ThreadView({
         {running && (shown.content ? <Markdown content={shown.content} variant="bubble" /> : <Thinking />)}
         {(waiting || pending?.error) && !temporary && (
           <div className="rounded-lg bg-amber-500/10 px-2.5 py-2 text-xs">
-            <p>{pending?.error ?? "Clarity n'a pas encore répondu."}</p>
+            <p>{pending?.error ?? t.annotations.notAnswered}</p>
             {waiting && (
               <button type="button" onClick={actions.onRetry} className="mt-1 font-semibold text-indigo-600 hover:underline dark:text-indigo-400">
-                {pending?.error ? "Réessayer" : "Demander la réponse"}
+                {pending?.error ? t.common.retry : t.annotations.askAnswer}
               </button>
             )}
           </div>
@@ -259,15 +261,15 @@ export function ThreadView({
             rows={1}
             maxLength={4000}
             disabled={running}
-            placeholder={running ? "Clarity répond…" : "Répondre…"}
-            aria-label="Répondre dans la bulle"
+            placeholder={running ? t.annotations.answering : t.annotations.reply}
+            aria-label={t.annotations.replyLabel}
             className="max-h-28 min-h-8 flex-1 resize-none rounded-lg border border-black/15 bg-transparent px-2.5 py-1.5 text-sm outline-none [field-sizing:content] focus:border-indigo-500 disabled:opacity-50 dark:border-white/20"
           />
           <button
             type="submit"
             disabled={running || !text.trim()}
             className="h-8 rounded-lg bg-indigo-600 px-2.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
-            aria-label="Envoyer"
+            aria-label={t.course.send}
           >
             ↑
           </button>
@@ -295,7 +297,7 @@ export function ThreadView({
           disabled={temporary}
           className="rounded-lg px-2 py-1 text-xs text-red-600 hover:bg-red-500/10 disabled:opacity-40 dark:text-red-400"
         >
-          Supprimer
+          {t.common.delete}
         </button>
       </div>
     </div>
@@ -310,6 +312,7 @@ export function BubblePreview({ annotation, ping, pending }: { annotation: Annot
   const lastAnswer = answers[answers.length - 1];
   const live = pending?.running ? (isPartialVerdict(pending.text) ? { verdict: null, content: "" } : extractVerdict(pending.text)) : null;
   const replies = thread.length + (kind === "question" ? 0 : 1);
+  const { t } = useT();
 
   return (
     <div className="space-y-1">
@@ -317,24 +320,28 @@ export function BubblePreview({ annotation, ping, pending }: { annotation: Annot
         {/* eslint-disable-next-line @next/next/no-img-element -- icône du ping */}
         <img src={pingIconUrl(ping.icon)} alt="" className="h-4 w-4" />
         <span className="truncate whitespace-nowrap text-[0.65rem] font-semibold uppercase tracking-wide" style={{ color: ping.color }}>
-          {KIND_LABEL[kind]}
+          {t.annotations.kind[kind]}
         </span>
         <VerdictBadge kind={kind} verdict={live?.verdict ?? annotation.verdict} />
         {replies > 2 && <span className="ml-auto text-[0.65rem] opacity-50">💬 {replies}</span>}
       </div>
-      <p className="line-clamp-2 text-sm">{openingText(annotation)}</p>
+      <p className="line-clamp-2 text-sm">{openingText(annotation, t)}</p>
       {live ? (
         live.content ? (
-          <p className="line-clamp-2 text-xs opacity-70">Clarity : {plain(live.content)}</p>
+          <p className="line-clamp-2 text-xs opacity-70">
+            {t.annotations.clarityPrefix} {plain(live.content)}
+          </p>
         ) : (
           <Thinking />
         )
       ) : pending?.error ? (
         <p className="text-xs text-amber-700 dark:text-amber-400">⚠ {pending.error}</p>
       ) : lastAnswer ? (
-        <p className="line-clamp-2 text-xs opacity-70">Clarity : {plain(extractVerdict(lastAnswer.content).content)}</p>
+        <p className="line-clamp-2 text-xs opacity-70">
+          {t.annotations.clarityPrefix} {plain(extractVerdict(lastAnswer.content).content)}
+        </p>
       ) : awaitsAnswer(annotation) && !annotation.id.startsWith("tmp-") ? (
-        <p className="text-xs text-amber-700 dark:text-amber-400">Pas encore de réponse · ouvrir pour la demander</p>
+        <p className="text-xs text-amber-700 dark:text-amber-400">{t.annotations.noAnswerYet}</p>
       ) : null}
     </div>
   );
@@ -370,6 +377,8 @@ export function MarginBubble({
     return () => register(annotation.id, null);
   }, [annotation.id, register]);
   const done = annotation.status !== "open";
+  const { t } = useT();
+  const label = t.annotations.kind[annotation.kind];
 
   return (
     <div
@@ -386,7 +395,7 @@ export function MarginBubble({
       }}
       role={active ? "dialog" : "button"}
       tabIndex={active ? undefined : 0}
-      aria-label={active ? KIND_LABEL[annotation.kind] : `Ouvrir : ${KIND_LABEL[annotation.kind]}`}
+      aria-label={active ? label : t.annotations.open(label)}
       className={`absolute left-0 w-full rounded-xl border border-l-[3px] bg-[var(--background)] transition-[top,box-shadow] duration-200 ${
         active
           ? "z-20 border-black/15 p-3 shadow-xl dark:border-white/20"

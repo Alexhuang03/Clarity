@@ -5,6 +5,7 @@ import type { MindMapNode, MindMapResponse, MindMapSummary, StudyScope } from "@
 import { errorMessage, formatDate, studyApi } from "./api";
 import { DeleteButton, ErrorNote, Field, Generating, ListSkeleton, Md, ScopePicker, SectionTitle, ToolIntro, type ScopeOptions } from "./ui";
 import { useStudyResource } from "./use-study";
+import { useT } from "@/lib/i18n/client";
 
 // ------------------------------------------------------------------ Disposition de l'arbre
 
@@ -62,6 +63,7 @@ function MindMapView({ tree }: { tree: MindMapNode }) {
       else next.add(id);
       return next;
     });
+  const { t } = useT();
   const collapseAll = () => {
     const set = new Set<string>();
     tree.children.forEach((c) => c.children.length && set.add(c.id));
@@ -71,12 +73,12 @@ function MindMapView({ tree }: { tree: MindMapNode }) {
   return (
     <div className="card overflow-hidden">
       <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5 text-sm">
-        <span className="mr-auto text-xs text-muted">Clique sur une notion pour la déplier et voir son résumé.</span>
+        <span className="mr-auto text-xs text-muted">{t.study.mindmap.hint}</span>
         <button type="button" onClick={() => setCollapsed(new Set())} className="btn btn-ghost px-2.5 py-1 text-xs">
-          Tout déplier
+          {t.study.mindmap.expandAll}
         </button>
         <button type="button" onClick={collapseAll} className="btn btn-ghost px-2.5 py-1 text-xs">
-          Tout replier
+          {t.study.mindmap.collapseAll}
         </button>
       </div>
       <div className="overflow-auto bg-[radial-gradient(var(--line)_1px,transparent_1px)] [background-size:20px_20px] p-6">
@@ -95,7 +97,7 @@ function MindMapView({ tree }: { tree: MindMapNode }) {
               ) : null,
             )}
           </svg>
-          <ul role="tree" aria-label="Carte mentale">
+          <ul role="tree" aria-label={t.study.mindmap.treeLabel}>
             {placed.map((p) => {
               const hasChildren = p.node.children.length > 0;
               const isCollapsed = collapsed.has(p.node.id);
@@ -150,10 +152,10 @@ function MindMapView({ tree }: { tree: MindMapNode }) {
               {selected.summary ? (
                 <Md text={selected.summary} className="mt-1 text-muted" />
               ) : (
-                <p className="mt-1 text-sm text-muted">Pas de résumé pour cette notion.</p>
+                <p className="mt-1 text-sm text-muted">{t.study.mindmap.noSummary}</p>
               )}
             </div>
-            <button type="button" onClick={() => setSelected(null)} aria-label="Fermer" className="btn btn-ghost px-2 py-1">
+            <button type="button" onClick={() => setSelected(null)} aria-label={t.common.close} className="btn btn-ghost px-2 py-1">
               ✕
             </button>
           </div>
@@ -167,6 +169,7 @@ function MindMapView({ tree }: { tree: MindMapNode }) {
 
 export function MindMapTool({ courseId, scopeOptions }: { courseId: string; scopeOptions: ScopeOptions }) {
   const list = useStudyResource<{ mindmaps: MindMapSummary[] }>(courseId, "/mindmaps");
+  const { t, intl } = useT();
   const [selected, setSelected] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -209,16 +212,16 @@ export function MindMapTool({ courseId, scopeOptions }: { courseId: string; scop
   return (
     <>
       <ToolIntro
-        title="Carte mentale"
+        title={t.study.mindmap.title}
         action={
           !showForm && (
             <button type="button" onClick={() => setCreating(true)} disabled={generating} className="btn btn-primary">
-              Nouvelle carte
+              {t.study.mindmap.new}
             </button>
           )
         }
       >
-        Les grandes notions du cours et la façon dont elles s&apos;articulent.
+        {t.study.mindmap.intro}
       </ToolIntro>
 
       {maps.length > 1 && !showForm && (
@@ -245,23 +248,23 @@ export function MindMapTool({ courseId, scopeOptions }: { courseId: string; scop
         ) : list.error ? (
           <ErrorNote message={list.error} onRetry={list.reload} />
         ) : generating ? (
-          <Generating hint="Clarity repère les grandes notions du cours et leurs liens : comptes 20 à 60 secondes." />
+          <Generating hint={t.study.mindmap.generatingHint} />
         ) : showForm ? (
           <div className="card rise-in">
             <div className="space-y-6 p-6">
-              <Field label="Titre" hint="facultatif">
-                <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} placeholder="Ex. Vue d'ensemble du chapitre 1" className="field" />
+              <Field label={t.study.titleLabel} hint={t.study.optional}>
+                <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} placeholder={t.study.mindmap.titlePlaceholder} className="field" />
               </Field>
               <ScopePicker options={scopeOptions} value={scope} onChange={setScope} />
             </div>
             <div className="flex justify-end gap-2 border-t border-line px-6 py-4">
               {maps.length > 0 && (
                 <button type="button" onClick={() => setCreating(false)} className="btn btn-ghost">
-                  Annuler
+                  {t.common.cancel}
                 </button>
               )}
               <button type="button" onClick={generate} className="btn btn-primary">
-                Générer la carte
+                {t.study.mindmap.generate}
               </button>
             </div>
           </div>
@@ -271,8 +274,8 @@ export function MindMapTool({ courseId, scopeOptions }: { courseId: string; scop
               <div className="mr-auto min-w-0">
                 <SectionTitle>{shown.title}</SectionTitle>
               </div>
-              <span className="text-xs text-muted">{formatDate(shown.createdAt)}</span>
-              <DeleteButton onDelete={() => remove(shown.id)} label="Supprimer la carte" />
+              <span className="text-xs text-muted">{formatDate(shown.createdAt, intl)}</span>
+              <DeleteButton onDelete={() => remove(shown.id)} label={t.study.mindmap.delete} />
             </div>
             <MindMapView key={shown.id} tree={shown.tree} />
           </section>

@@ -62,7 +62,7 @@ export async function createMindMap(session: Session & { ctx: CourseContext }, b
   await enforceStudyLimit(session.userId);
   const { value, model } = await generateJson(
     modelChain("study"),
-    { system: mindmapPrompt(), user: content.block, maxTokens: 6144, temperature: 0.3, beforeRetry: () => enforceStudyLimit(session.userId) },
+    { system: mindmapPrompt(session.ctx.locale), user: content.block, maxTokens: 6144, temperature: 0.3, beforeRetry: () => enforceStudyLimit(session.userId) },
     treeSchema,
     "carte mentale",
   );

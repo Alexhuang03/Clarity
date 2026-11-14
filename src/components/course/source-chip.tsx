@@ -3,9 +3,11 @@
 import { createContext, use, useState } from "react";
 import { getDocumentUrl } from "@/app/courses/actions";
 import type { Source } from "@/lib/course/sources";
+import { useT } from "@/lib/i18n/client";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 
-function sourceLabel(source: Source) {
-  return `${source.filename.replace(/\.[^.]+$/, "")}${source.page ? ` · p.${source.page}` : ""}`;
+function sourceLabel(source: Source, t: Dictionary) {
+  return `${source.filename.replace(/\.[^.]+$/, "")}${source.page ? ` · ${t.course.page(source.page)}` : ""}`;
 }
 
 /** false sur une page partagée : les fichiers originaux restent privés, on n'affiche que l'extrait. */
@@ -24,12 +26,13 @@ async function openSource(source: Source) {
 /** Pastille numérotée dans le texte : discrète, le détail s'affiche au survol. */
 export function CitationPill({ source, number }: { source: Source; number: number }) {
   const openable = use(SourcesOpenable);
+  const { t } = useT();
   return (
     <button
       type="button"
       onClick={openable ? () => openSource(source) : undefined}
-      title={`${sourceLabel(source)}${source.section ? ` — ${source.section}` : ""}\n\n${source.excerpt}…`}
-      aria-label={`Source ${number} : ${sourceLabel(source)}`}
+      title={`${sourceLabel(source, t)}${source.section ? ` — ${source.section}` : ""}\n\n${source.excerpt}…`}
+      aria-label={t.course.sourceLabel(number, sourceLabel(source, t))}
       data-annot-ignore
       className="mx-px inline-flex h-[1.15rem] min-w-[1.15rem] -translate-y-px items-center justify-center rounded-full bg-indigo-500/15 px-1 align-middle text-[0.65rem] font-semibold leading-none text-indigo-700 no-underline transition hover:bg-indigo-500 hover:text-white dark:text-indigo-300"
     >
@@ -42,11 +45,12 @@ export function CitationPill({ source, number }: { source: Source; number: numbe
 export function SourcesList({ sources }: { sources: { source: Source; number: number }[] }) {
   const [open, setOpen] = useState(false);
   const openable = use(SourcesOpenable);
+  const { t } = useT();
   if (sources.length === 0) return null;
   const visible = open ? sources : sources.slice(0, 4);
   return (
     <div data-annot-ignore className="mt-6 border-t border-black/10 pt-4 dark:border-white/10">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide opacity-50">Sources</p>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide opacity-50">{t.course.sources}</p>
       <ul className="grid gap-1.5 sm:grid-cols-2">
         {visible.map(({ source, number }) => (
           <li key={source.n}>
@@ -61,7 +65,7 @@ export function SourcesList({ sources }: { sources: { source: Source; number: nu
               </span>
               <span aria-hidden>{source.kind === "exo" ? "✏️" : "📄"}</span>
               <span className="min-w-0 flex-1 truncate">
-                {sourceLabel(source)}
+                {sourceLabel(source, t)}
                 {source.section && <span className="opacity-50"> — {source.section}</span>}
               </span>
             </button>
@@ -70,7 +74,7 @@ export function SourcesList({ sources }: { sources: { source: Source; number: nu
       </ul>
       {sources.length > 4 && (
         <button type="button" onClick={() => setOpen((o) => !o)} className="mt-1 px-2 text-sm text-indigo-600 hover:underline dark:text-indigo-400">
-          {open ? "Voir moins" : `Voir les ${sources.length} sources`}
+          {open ? t.course.showLess : t.course.showAllSources(sources.length)}
         </button>
       )}
     </div>

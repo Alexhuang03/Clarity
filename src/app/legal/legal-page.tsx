@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { LegalTabs } from "@/components/legal/legal-dialog";
+import { LegalFrenchNote, LegalTabs } from "@/components/legal/legal-dialog";
 import { LEGAL_TABS, LegalContent, type LegalTab } from "@/components/legal/content";
 
 // L'onglet affiché suit l'ancre de l'URL (/legal#confidentialite) : la page reste statique et partageable
@@ -26,6 +26,7 @@ export function LegalPage() {
         }}
       />
       <div id="legal-panel" role="tabpanel" aria-labelledby={`legal-tab-${tab}`} className="px-4 py-6 sm:px-8">
+        <LegalFrenchNote />
         <LegalContent tab={tab} />
       </div>
     </div>

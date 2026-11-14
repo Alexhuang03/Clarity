@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { DocumentRow, MessageRow, PartRow } from "@/lib/course/types";
+import { useT } from "@/lib/i18n/client";
 import { CourseOutline, hasOutline } from "./course-outline";
 
 /**
@@ -26,6 +27,7 @@ export function OutlineButton({
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
+  const { t } = useT();
   if (!hasOutline(messages) && !documents?.length) return null;
   // Pastille : documents en cours de lecture (bleue) ou en erreur (rouge)
   const reading = documents?.some((d) => d.status === "uploaded" || d.status === "parsing");
@@ -38,16 +40,16 @@ export function OutlineButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Sommaire"
+        aria-label={t.course.outline}
         className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm opacity-70 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10 xl:hidden ${className}`}
       >
         <svg aria-hidden viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6} className="h-4 w-4">
           <path strokeLinecap="round" d="M7 5h10M7 10h10M7 15h10M3.5 5h.01M3.5 10h.01M3.5 15h.01" />
         </svg>
-        <span>Sommaire</span>
+        <span>{t.course.outline}</span>
         {(reading || failed) && (
           <span
-            aria-label={failed ? "Un document est en erreur" : "Lecture de documents en cours"}
+            aria-label={failed ? t.course.docError : t.course.docsReading}
             className={`h-2 w-2 rounded-full ${failed ? "bg-red-500" : "animate-pulse bg-indigo-500"}`}
           />
         )}
@@ -70,7 +72,7 @@ export function OutlineButton({
                 <button
                   type="button"
                   onClick={close}
-                  aria-label="Fermer le sommaire"
+                  aria-label={t.course.closeOutline}
                   className="rounded-lg px-2 py-1 opacity-50 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
                 >
                   ✕

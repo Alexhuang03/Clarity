@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { EditCourseForm } from "@/components/course/edit-course-form";
 import { Spotlight } from "@/components/ui/spotlight";
+import { useT } from "@/lib/i18n/client";
 import { ShareButton, ShareIcon } from "@/components/course/share-dialog";
 import { DeleteCourseButton } from "./delete-course-button";
 
@@ -28,6 +29,7 @@ export function CourseCard({
   createdAt: string;
 }) {
   const [editing, setEditing] = useState(false);
+  const { t, intl } = useT();
 
   if (editing) {
     return (
@@ -66,8 +68,8 @@ export function CourseCard({
           <p className="mt-3 line-clamp-2 text-[0.95rem] font-medium leading-snug">{title}</p>
           <p className="mt-auto flex items-center justify-between pt-6 text-xs text-muted">
             <span>
-              {documentCount} document{documentCount > 1 ? "s" : ""} ·{" "}
-              {new Date(createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+              {t.dashboard.documents(documentCount)} ·{" "}
+              {new Date(createdAt).toLocaleDateString(intl, { day: "numeric", month: "short" })}
             </span>
             <span
               aria-hidden
@@ -86,8 +88,8 @@ export function CourseCard({
         <button
           type="button"
           onClick={() => setEditing(true)}
-          aria-label={`Modifier le cours ${title}`}
-          title="Modifier le titre ou la matière"
+          aria-label={t.dashboard.editCourse(title)}
+          title={t.dashboard.editCourseTitle}
           className={ICON_BUTTON}
         >
           <svg aria-hidden viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">

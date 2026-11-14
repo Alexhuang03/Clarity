@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { authErrorMessage, safeNextPath } from "@/lib/auth-errors";
+import { safeNextPath } from "@/lib/auth-errors";
+import { authErrorText } from "@/lib/i18n/auth";
+import { useT } from "@/lib/i18n/client";
+import { LoginPresentation } from "@/components/auth/presentation";
+import { syncLocaleAfterLogin } from "@/app/account/locale-actions";
 import {
   AuthCard,
   CodeInput,
@@ -21,6 +25,8 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
+  const { t } = useT();
+  const authErrorMessage = (e: Parameters<typeof authErrorText>[0]) => authErrorText(e, t);
   const [step, setStep] = useState<"form" | "verify">("form");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,7 +35,9 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  function goToNext() {
+  async function goToNext() {
+    // La langue enregistrée dans le compte l'emporte : l'action met le cookie à jour
+    await syncLocaleAfterLogin().catch(() => null);
     router.replace(safeNextPath(searchParams.get("next")));
     router.refresh();
   }
@@ -47,14 +55,14 @@ export function LoginForm() {
       if (resendError && !recentlySent) return setError(authErrorMessage(resendError));
       setInfo(
         recentlySent
-          ? `Ton adresse n'est pas encore vérifiée. Utilise le code envoyé à ${email} il y a moins d'une minute.`
-          : `Ton adresse n'est pas encore vérifiée. Un code a été envoyé à ${email}.`,
+          ? t.auth.notVerifiedRecent(email)
+          : t.auth.notVerifiedSent(email),
       );
       return setStep("verify");
     }
     setLoading(false);
     if (error) return setError(authErrorMessage(error));
-    goToNext();
+    await goToNext();
   }
 
   async function verify(e: React.FormEvent) {
@@ -64,7 +72,7 @@ export function LoginForm() {
     const { error } = await supabase.auth.verifyOtp({ email, token: code, type: "signup" });
     setLoading(false);
     if (error) return setError(authErrorMessage(error));
-    goToNext();
+    await goToNext();
   }
 
   async function resend() {
@@ -74,17 +82,17 @@ export function LoginForm() {
       setError(authErrorMessage(error));
       return false;
     }
-    setInfo("Nouveau code envoyé.");
+    setInfo(t.auth.newCodeSent);
     return true;
   }
 
   if (step === "verify") {
     return (
-      <AuthCard title="Vérifie ton email" subtitle="Saisis le code à 6 chiffres reçu par email.">
+      <AuthCard title={t.auth.verifyTitle} subtitle={t.auth.verifySubtitle}>
         <form onSubmit={verify} className="space-y-3">
           <CodeInput value={code} onChange={setCode} />
           <button disabled={loading || code.length !== 6} className={primaryButton}>
-            {loading ? "Vérification…" : "Valider"}
+            {loading ? t.auth.verifying : t.auth.validate}
           </button>
           <ResendButton onResend={resend} />
         </form>
@@ -96,18 +104,19 @@ export function LoginForm() {
 
   return (
     <AuthCard
-      title="Se connecter"
+      title={t.auth.loginTitle}
+      aside={<LoginPresentation />}
       footer={
         <>
-          Pas encore de compte ?{" "}
+          {t.auth.noAccount}{" "}
           <Link href="/signup" className={linkClass}>
-            Créer un compte
+            {t.auth.createAccountLink}
           </Link>
         </>
       }
     >
       <form onSubmit={signIn} className="space-y-4">
-        <Field label="Email">
+        <Field label={t.auth.email}>
           {(id) => (
             <input
               id={id}
@@ -117,12 +126,12 @@ export function LoginForm() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value.trim())}
-              placeholder="toi@exemple.com"
+              placeholder={t.auth.emailPlaceholder}
               className={inputClass}
             />
           )}
         </Field>
-        <Field label="Mot de passe">
+        <Field label={t.auth.password}>
           {(id) => (
             <PasswordInput
               id={id}
@@ -134,11 +143,11 @@ export function LoginForm() {
         </Field>
         <div className="-mt-2 text-right text-sm">
           <Link href="/forgot-password" className={linkClass}>
-            Mot de passe oublié ?
+            {t.auth.forgotLink}
           </Link>
         </div>
         <button disabled={loading} className={primaryButton}>
-          {loading ? "Connexion…" : "Se connecter"}
+          {loading ? t.auth.loggingIn : t.auth.loginTitle}
         </button>
       </form>
       <Message type="error">{error}</Message>

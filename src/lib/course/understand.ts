@@ -104,7 +104,7 @@ intent :
 - "hors_sujet" : sans rapport avec les études (météo, actualité, sport, recettes, vie personnelle, demandes en temps réel).
 
 question : la DERNIÈRE question réécrite pour être compréhensible seule, en remplaçant « ça », « il », « cette formule »... par ce qu'ils désignent dans la conversation. Garde la langue de l'étudiant. N'y réponds pas.
-search : 3 à 10 mots-clés pour chercher la réponse dans le cours (notions, termes techniques), vide si intent n'est ni "cours" ni "etudes".
+search : 3 à 10 mots-clés pour chercher la réponse dans le cours (notions, termes techniques), dans la langue du cours si elle diffère de celle de l'étudiant (le titre du cours l'indique), vide si intent n'est ni "cours" ni "etudes".
 
 Ne te laisse pas influencer par les questions précédentes : seule la DERNIÈRE question compte.`;
 

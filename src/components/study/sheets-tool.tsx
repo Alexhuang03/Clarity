@@ -6,9 +6,11 @@ import type { SheetResponse, SheetSummary, StudyScope } from "@/lib/study/types"
 import { errorMessage, formatDate, studyApi } from "./api";
 import { DeleteButton, ErrorNote, Field, Generating, ListSkeleton, ScopePicker, SectionTitle, ToolIntro, type ScopeOptions } from "./ui";
 import { useStudyResource } from "./use-study";
+import { useT } from "@/lib/i18n/client";
 
 export function SheetsTool({ courseId, scopeOptions }: { courseId: string; scopeOptions: ScopeOptions }) {
   const list = useStudyResource<{ sheets: SheetSummary[] }>(courseId, "/sheets");
+  const { t, intl } = useT();
   const [selected, setSelected] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [generating, setGenerating] = useState<"new" | "regen" | null>(null);
@@ -67,27 +69,27 @@ export function SheetsTool({ courseId, scopeOptions }: { courseId: string; scope
   return (
     <>
       <ToolIntro
-        title="Fiches de révision"
+        title={t.study.sheets.title}
         action={
           !showForm && (
             <button type="button" onClick={() => setCreating(true)} disabled={!!generating} className="btn btn-primary">
-              Nouvelle fiche
+              {t.study.sheets.new}
             </button>
           )
         }
       >
-        L&apos;essentiel sur une page : notions clés, définitions, formules et pièges à éviter.
+        {t.study.sheets.intro}
       </ToolIntro>
 
       <div className="grid gap-8 lg:grid-cols-[15rem_minmax(0,1fr)]">
         <aside className="print:hidden">
-          <SectionTitle>Mes fiches</SectionTitle>
+          <SectionTitle>{t.study.sheets.mine}</SectionTitle>
           {list.loading && !list.data ? (
             <ListSkeleton />
           ) : list.error ? (
             <ErrorNote message={list.error} onRetry={list.reload} />
           ) : sheets.length === 0 ? (
-            <p className="text-sm text-muted">Aucune fiche pour l&apos;instant.</p>
+            <p className="text-sm text-muted">{t.study.sheets.none}</p>
           ) : (
             <ul className="space-y-1">
               {sheets.map((s) => (
@@ -104,7 +106,7 @@ export function SheetsTool({ courseId, scopeOptions }: { courseId: string; scope
                     }`}
                   >
                     <span className="line-clamp-2">{s.title}</span>
-                    <span className="mt-0.5 block text-xs font-normal text-muted">{formatDate(s.updatedAt)}</span>
+                    <span className="mt-0.5 block text-xs font-normal text-muted">{formatDate(s.updatedAt, intl)}</span>
                   </button>
                 </li>
               ))}
@@ -116,39 +118,39 @@ export function SheetsTool({ courseId, scopeOptions }: { courseId: string; scope
           <ErrorNote message={error} />
           {generating ? (
             <Generating
-              label={generating === "regen" ? "Nouvelle version en cours…" : "Génération en cours…"}
-              hint="Clarity relit le cours et condense l'essentiel : comptes 30 à 90 secondes."
+              label={generating === "regen" ? t.study.sheets.regenerating : t.study.generating}
+              hint={t.study.sheets.generatingHint}
             />
           ) : showForm ? (
             <div className="card rise-in">
               <div className="space-y-6 p-6">
-                <Field label="Titre" hint="facultatif">
-                  <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} placeholder="Ex. Chapitre 3 — Intégrales" className="field" />
+                <Field label={t.study.titleLabel} hint={t.study.optional}>
+                  <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} placeholder={t.study.sheets.titlePlaceholder} className="field" />
                 </Field>
                 <ScopePicker options={scopeOptions} value={scope} onChange={setScope} />
               </div>
               <div className="flex justify-end gap-2 border-t border-line px-6 py-4">
                 {sheets.length > 0 && (
                   <button type="button" onClick={() => setCreating(false)} className="btn btn-ghost">
-                    Annuler
+                    {t.common.cancel}
                   </button>
                 )}
                 <button type="button" onClick={generate} className="btn btn-primary">
-                  Générer la fiche
+                  {t.study.sheets.generate}
                 </button>
               </div>
             </div>
           ) : shown ? (
             <article className="rise-in">
               <div className="mb-5 flex flex-wrap items-center gap-2 print:hidden">
-                <p className="mr-auto text-xs text-muted">Mise à jour le {formatDate(shown.updatedAt)}</p>
+                <p className="mr-auto text-xs text-muted">{t.study.sheets.updatedOn(formatDate(shown.updatedAt, intl))}</p>
                 <button type="button" onClick={() => window.print()} className="btn btn-ghost px-3 py-1.5">
-                  Imprimer
+                  {t.study.sheets.print}
                 </button>
                 <button type="button" onClick={() => regenerate(shown.id)} className="btn btn-secondary px-3 py-1.5">
-                  Régénérer
+                  {t.study.sheets.regenerate}
                 </button>
-                <DeleteButton onDelete={() => remove(shown.id)} label="Supprimer la fiche" />
+                <DeleteButton onDelete={() => remove(shown.id)} label={t.study.sheets.delete} />
               </div>
               <Markdown content={shown.content} sources={shown.data.sources} variant="summary" messageId={`sheet-${shown.id}`} />
             </article>

@@ -7,12 +7,25 @@ import sharp from "sharp";
 import { extractText } from "unpdf";
 import { readFileWithGemini } from "@/lib/ai/gemini";
 import { assertSafeZip, UnsafeArchiveError } from "@/lib/security/zip";
+import { EMBEDDED_PREFIX, type FigureImage } from "./figures";
+import { replaceEquations } from "./omml";
+import { elements, innerText, mapElements } from "./xml-scan";
 
 /** Erreur dont le message peut être montré tel quel à l'utilisateur. */
 export class UserFacingError extends Error {}
 
 export type Page = { page: number | null; text: string };
-export type Extracted = { pages: Page[]; pageCount: number | null };
+export type Extracted = {
+  pages: Page[];
+  pageCount: number | null;
+  /** Images intégrées (Word, PowerPoint), référencées dans le texte par ![légende](clarity-figure:n) : décrites ensuite par l'IA */
+  figures?: Map<string, FigureImage>;
+};
+
+/** Images intégrées décrites au plus (chacune coûte une part de requête à l'IA) */
+const MAX_EMBEDDED_FIGURES = 30;
+/** Formats lisibles par Gemini (EMF / WMF de Word, non) */
+const FIGURE_TYPES: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp" };
 
 // Pages envoyées à Gemini par requête, et requêtes simultanées.
 // 3 x 5 pages : progression régulière, et sous la limite gratuite (~10 requêtes / minute).
@@ -189,16 +202,100 @@ async function extractImage(original: Uint8Array, originalType: string): Promise
   return { pages: [{ page: 1, text: text.trim() }], pageCount: 1 };
 }
 
+/**
+ * Markdown sans échappement des passages $…$ : turndown échappe « _ » et « * » (x_{1} deviendrait x\_{1}),
+ * ce qui casserait les équations converties.
+ */
+function markdownConverter() {
+  const service = new TurndownService({ headingStyle: "atx" });
+  const escape = service.escape.bind(service);
+  service.escape = (text: string) =>
+    text
+      .split(/(\$\$[\s\S]+?\$\$|\$[^$\n]+\$)/)
+      .map((piece, i) => (i % 2 ? piece : escape(piece)))
+      .join("");
+  return service;
+}
+
 async function extractDocx(data: Uint8Array): Promise<Extracted> {
   await checkArchive(data);
-  const { value: html } = await mammoth.convertToHtml({ buffer: Buffer.from(data) });
-  const markdown = new TurndownService({ headingStyle: "atx" }).turndown(html);
-  return { pages: [{ page: null, text: capText(markdown) }], pageCount: null };
+  // Équations (OMML) converties en LaTeX avant mammoth, qui les supprimerait
+  const zip = await JSZip.loadAsync(data);
+  const documentXml = await zip.file("word/document.xml")?.async("string");
+  let buffer: Buffer = Buffer.from(data);
+  if (documentXml && /<m:oMath/.test(documentXml)) {
+    zip.file("word/document.xml", replaceEquations(documentXml, (text) => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`));
+    buffer = await zip.generateAsync({ type: "nodebuffer" });
+  }
+  // Images : référencées par un lien court au lieu d'être recopiées en base64 dans le texte
+  // (avant : des centaines de milliers de caractères illisibles dans les morceaux du cours)
+  const figures = new Map<string, FigureImage>();
+  const { value: html } = await mammoth.convertToHtml(
+    { buffer },
+    {
+      convertImage: mammoth.images.imgElement(async (image) => {
+        // Texte alternatif (« descr » de l'image dans Word) : absent des types de mammoth, mais fourni
+        const alt = ((image as { altText?: string }).altText ?? "").replace(/\s+/g, " ").trim();
+        const type = image.contentType?.split("/")[1]?.toLowerCase() ?? "";
+        if (!FIGURE_TYPES[type] || figures.size >= MAX_EMBEDDED_FIGURES) return { src: `${EMBEDDED_PREFIX}none`, alt };
+        const href = `${EMBEDDED_PREFIX}${figures.size}`;
+        figures.set(href, { data: new Uint8Array(await image.readAsBuffer()), mimeType: FIGURE_TYPES[type] });
+        return { src: href, alt };
+      }),
+    },
+  );
+  const markdown = markdownConverter().turndown(html);
+  return { pages: [{ page: null, text: capText(markdown) }], pageCount: null, figures };
 }
 
 const XML_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
 const decodeXml = (s: string) => s.replace(/&(amp|lt|gt|quot|apos);/g, (_, e) => XML_ENTITIES[e]);
 
+/** Texte des paragraphes <a:p> (morceaux <a:t>) d'un fragment XML DrawingML. */
+// Parcours par indexOf (xml-scan) et non par expressions /<tag>[\s\S]*?<\/tag>/ : temps linéaire même si une
+// balise n'est jamais fermée (une diapositive forgée pouvait sinon bloquer le serveur).
+const paragraphsOf = (xml: string) =>
+  elements(xml, "a:p")
+    .map((p) => elements(p, "a:t").map((t) => decodeXml(innerText(t))).join(""))
+    .filter((p) => p.trim());
+
+/** Tableau DrawingML (<a:tbl>) → tableau Markdown. */
+function tableToMarkdown(xml: string): string {
+  const rows = elements(xml, "a:tr").map((tr) =>
+    elements(tr, "a:tc").map((tc) => paragraphsOf(tc).join(" ").replace(/\|/g, "\\|").trim()),
+  );
+  if (!rows.length) return "";
+  const width = Math.max(...rows.map((r) => r.length));
+  const line = (cells: string[]) => `| ${Array.from({ length: width }, (_, i) => cells[i] ?? "").join(" | ")} |`;
+  return [line(rows[0]), `|${" --- |".repeat(width)}`, ...rows.slice(1).map(line)].join("\n");
+}
+
+/** Cible d'une relation (rId → fichier) d'une diapositive, chemin complet dans l'archive. */
+async function slideRelations(zip: JSZip, slideName: string): Promise<Map<string, string>> {
+  const relsName = slideName.replace(/slides\/(slide\d+\.xml)$/, "slides/_rels/$1.rels");
+  const xml = (await zip.file(relsName)?.async("string")) ?? "";
+  const rels = new Map<string, string>();
+  for (const m of xml.matchAll(/<Relationship\b[^>]*>/g)) {
+    const id = m[0].match(/\bId="([^"]+)"/)?.[1];
+    const target = m[0].match(/\bTarget="([^"]+)"/)?.[1];
+    if (!id || !target || /TargetMode="External"/.test(m[0])) continue;
+    // Cibles relatives au dossier ppt/slides/ (ex. ../media/image1.png)
+    const parts = ["ppt", "slides", ...target.split("/")];
+    const resolved: string[] = [];
+    for (const p of parts) {
+      if (p === "..") resolved.pop();
+      else if (p && p !== ".") resolved.push(p);
+    }
+    rels.set(id, resolved.join("/"));
+  }
+  return rels;
+}
+
+/**
+ * Diapositives : texte, tableaux (en tableaux Markdown), équations (en LaTeX), notes de l'intervenant,
+ * et images (décrites ensuite par l'IA). Avant : seul le texte des zones de texte était lu, sans les schémas
+ * ni les notes, qui portent souvent l'essentiel de l'explication d'un diaporama.
+ */
 async function extractPptx(data: Uint8Array): Promise<Extracted> {
   await checkArchive(data);
   const zip = await JSZip.loadAsync(data);
@@ -209,19 +306,55 @@ async function extractPptx(data: Uint8Array): Promise<Extracted> {
   if (slides.length > MAX_SLIDES) {
     throw new UserFacingError(`Présentation trop longue (${slides.length} diapositives, ${MAX_SLIDES} max).`);
   }
+  const figures = new Map<string, FigureImage>();
   const pages: Page[] = [];
   for (const slide of slides) {
-    const xml = await zip.file(slide.name)!.async("string");
-    // Un paragraphe <a:p> contient des morceaux de texte <a:t>
-    const paragraphs = [...xml.matchAll(/<a:p\b[\s\S]*?<\/a:p>/g)]
-      .map((p) => [...p[0].matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)].map((t) => decodeXml(t[1])).join(""))
-      .filter((p) => p.trim());
-    if (paragraphs.length) {
-      const [title, ...rest] = paragraphs;
-      pages.push({ page: slide.n, text: `## ${title}\n\n${rest.join("\n\n")}` });
+    const raw = await zip.file(slide.name)!.async("string");
+    const rels = await slideRelations(zip, slide.name);
+    // Équations : texte $…$ ; leur image de secours (mc:Fallback) est ignorée
+    const xml = replaceEquations(mapElements(raw, "mc:Fallback", () => ""), (text) => `<a:r><a:t>${text}</a:t></a:r>`);
+
+    const tables: string[] = [];
+    const withoutTables = mapElements(xml, "a:tbl", (t) => {
+      tables.push(tableToMarkdown(t));
+      return "";
+    });
+    const paragraphs = paragraphsOf(withoutTables);
+
+    const images: string[] = [];
+    for (const pic of elements(withoutTables, "p:pic")) {
+      const target = rels.get(pic.match(/<a:blip\b[^>]*r:embed="([^"]+)"/)?.[1] ?? "");
+      const type = target?.split(".").pop()?.toLowerCase() ?? "";
+      const alt = decodeXml(pic.match(/<p:cNvPr\b[^>]*\bdescr="([^"]*)"/)?.[1] ?? "").replace(/\s+/g, " ").trim();
+      if (!target || !FIGURE_TYPES[type] || figures.size >= MAX_EMBEDDED_FIGURES) {
+        if (alt) images.push(`[Schéma : ${alt}]`);
+        continue;
+      }
+      const bytes = await zip.file(target)?.async("uint8array");
+      if (!bytes) continue;
+      const href = `${EMBEDDED_PREFIX}${figures.size}`;
+      figures.set(href, { data: bytes, mimeType: FIGURE_TYPES[type] });
+      images.push(`![${alt.replace(/[[\]]/g, "")}](${href})`);
     }
+
+    // Notes de l'intervenant (sans le numéro de diapositive)
+    const notesTarget = [...rels.values()].find((t) => /notesSlides\/notesSlide\d+\.xml$/.test(t));
+    const notesXml = notesTarget ? ((await zip.file(notesTarget)?.async("string")) ?? "") : "";
+    const notes = paragraphsOf(mapElements(notesXml, "p:sp", (sp) => (sp.includes('type="sldNum"') ? "" : null))).filter(
+      (p) => !/^\d+$/.test(p.trim()),
+    );
+
+    if (!paragraphs.length && !tables.length && !images.length && !notes.length) continue;
+    const [title, ...rest] = paragraphs.length ? paragraphs : [`Diapositive ${slide.n}`];
+    const body = [
+      ...rest,
+      ...tables.filter(Boolean),
+      ...images,
+      ...(notes.length ? [`Notes de l'intervenant :\n\n${notes.join("\n\n")}`] : []),
+    ];
+    pages.push({ page: slide.n, text: `## ${title}\n\n${body.join("\n\n")}` });
   }
-  return { pages, pageCount: slides.length };
+  return { pages, pageCount: slides.length, figures };
 }
 
 export async function extractDocument(

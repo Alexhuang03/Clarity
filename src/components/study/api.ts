@@ -1,5 +1,8 @@
 "use client";
 
+import { currentDictionary } from "@/lib/i18n/client";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
+
 /**
  * Appels à l'API « Révision » (/api/courses/{id}/study/..., voir src/lib/study/API.md).
  * Toutes les erreurs deviennent une StudyApiError au message français prêt à afficher.
@@ -16,19 +19,18 @@ export class StudyApiError extends Error {
 }
 
 function friendlyMessage(status: number, serverMessage: string | undefined, retryAfter: number | null) {
+  const t = currentDictionary();
+  const e = t.study.errors;
   if (status === 429) {
-    const wait = retryAfter
-      ? retryAfter < 90
-        ? `dans ${retryAfter} s`
-        : `dans ${Math.ceil(retryAfter / 60)} min`
-      : "dans un moment";
-    return `Tu as lancé beaucoup de générations d'affilée. Fais une petite pause et réessaie ${wait}.`;
+    const wait = retryAfter ? (retryAfter < 90 ? e.inSeconds(retryAfter) : e.inMinutes(Math.ceil(retryAfter / 60))) : e.later;
+    return e.rateLimit(wait);
   }
+  // Message du serveur : déjà dans la langue de l'utilisateur (voir l'API « Révision »)
   if (serverMessage) return serverMessage;
-  if (status === 401) return "Ta session a expiré : reconnecte-toi.";
-  if (status === 404) return "Élément introuvable : il a peut-être été supprimé.";
-  if (status >= 502) return "L'IA est indisponible ou trop lente pour le moment. Réessaie dans quelques instants.";
-  return "Une erreur est survenue. Réessaie.";
+  if (status === 401) return e.session;
+  if (status === 404) return e.notFound;
+  if (status >= 502) return e.aiDown;
+  return t.common.genericError;
 }
 
 export async function studyApi<T>(
@@ -47,7 +49,7 @@ export async function studyApi<T>(
     });
   } catch (error) {
     if ((error as Error).name === "AbortError") throw error;
-    throw new StudyApiError("Connexion impossible. Vérifie ta connexion internet et réessaie.", 0);
+    throw new StudyApiError(currentDictionary().study.errors.network, 0);
   }
   const data = (await response.json().catch(() => null)) as (T & { error?: string }) | null;
   if (!response.ok) {
@@ -59,7 +61,7 @@ export async function studyApi<T>(
 }
 
 export const errorMessage = (error: unknown) =>
-  error instanceof Error ? error.message : "Une erreur est survenue. Réessaie.";
+  error instanceof Error ? error.message : currentDictionary().common.genericError;
 
 /** Fin de la journée locale (ISO) : « à réviser aujourd'hui ». */
 export function endOfToday() {
@@ -69,13 +71,15 @@ export function endOfToday() {
 }
 
 /** Intervalle SM-2 lisible : 0.0069 j → « 10 min », 1 → « 1 j », 45 → « 1,5 mois ». */
-export function formatInterval(days: number) {
-  if (days < 1 / 24) return `${Math.max(1, Math.round(days * 24 * 60))} min`;
-  if (days < 1) return `${Math.round(days * 24)} h`;
-  if (days < 30) return `${Math.round(days)} j`;
-  if (days < 365) return `${(days / 30).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} mois`;
-  return `${(days / 365).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} an`;
+export function formatInterval(days: number, t: Dictionary, intl: string) {
+  const i = t.study.interval;
+  const one = (n: number) => n.toLocaleString(intl, { maximumFractionDigits: 1 });
+  if (days < 1 / 24) return i.minutes(Math.max(1, Math.round(days * 24 * 60)));
+  if (days < 1) return i.hours(Math.round(days * 24));
+  if (days < 30) return i.days(Math.round(days));
+  if (days < 365) return i.months(one(days / 30));
+  return i.years(one(days / 365));
 }
 
-export const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+export const formatDate = (iso: string, intl: string) =>
+  new Date(iso).toLocaleDateString(intl, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });

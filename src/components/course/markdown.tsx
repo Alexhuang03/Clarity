@@ -7,6 +7,8 @@ import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { normalizeCitations, normalizeMath, type Source } from "@/lib/course/sources";
+import { useT } from "@/lib/i18n/client";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { CitationPill, SourcesList } from "./source-chip";
 
 // Typographie aérée : interligne confortable, paragraphes et listes espacés,
@@ -86,6 +88,8 @@ type Context = {
   numberOf: (n: number) => number | undefined;
   /** Préfixe des ids de titres (sommaire) ; absent = pas d'ids */
   idPrefix?: string;
+  /** Textes de l'interface (langue courante) */
+  t: Dictionary;
 };
 
 /**
@@ -122,7 +126,7 @@ function MarkdownBlock({ text, ctx, headingBase }: { text: string; ctx: Context;
       // Relatif = sans schéma (http:, javascript:...) ni début « // », « \\ », « /\ » (URL vers un autre domaine)
       const sameOrigin = url !== "" && !/^[a-z][a-z0-9+.-]*:/i.test(url) && !/^[\\/]{2}/.test(url);
       if (!sameOrigin && !/^data:image\/(png|jpe?g|gif|webp|avif);/i.test(url)) {
-        return alt ? <span className="text-muted italic">[image : {alt}]</span> : null;
+        return alt ? <span className="text-muted italic">{ctx.t.course.imageBlocked(alt)}</span> : null;
       }
       // eslint-disable-next-line @next/next/no-img-element -- contenu Markdown, dimensions inconnues
       return <img src={url} alt={alt ?? ""} loading="lazy" />;
@@ -156,7 +160,7 @@ function Blocks({ text, ctx, headingBase }: { text: string; ctx: Context; headin
     return segment.type === "corrige" ? (
       <details key={i} className="not-prose my-5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3">
         <summary className="cursor-pointer select-none font-medium text-emerald-700 dark:text-emerald-400">
-          Voir le corrigé
+          {ctx.t.course.showCorrection}
         </summary>
         <div className={`${PROSE} mt-3`}>
           <MarkdownBlock text={segment.text} ctx={ctx} headingBase={segmentBase} />
@@ -202,7 +206,8 @@ export function Markdown({
   const idPrefix = messageId ? `h-${messageId}` : generatedId;
   const text = normalizeMath(normalizeCitations(content));
   const { numberOf, cited } = citationNumbers(text, sources);
-  const ctx: Context = { sources, numberOf, idPrefix };
+  const { t } = useT();
+  const ctx: Context = { sources, numberOf, idPrefix, t };
 
   if (variant === "summary") {
     const sections = splitSections(text);

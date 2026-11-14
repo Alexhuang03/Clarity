@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
+import { I18nProvider } from "@/lib/i18n/client";
+import { LOCALE_COOKIE } from "@/lib/i18n/config";
+import { getT } from "@/lib/i18n/server";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -28,7 +32,8 @@ export const metadata: Metadata = {
 
 // Exécuté avant le premier affichage : applique le thème enregistré (ou celui du système)
 // pour éviter un flash de la mauvaise couleur. Sans choix enregistré, suit les changements du système.
-const THEME_SCRIPT = `(function(){try{var m=matchMedia("(prefers-color-scheme: dark)"),d=document.documentElement;function s(){var t=localStorage.getItem("theme");d.dataset.theme=t==="light"||t==="dark"?t:m.matches?"dark":"light"}s();m.addEventListener("change",s)}catch(e){}})()`;
+// Pose aussi <html lang> d'après le cookie de langue (la mise en page reste statique : pas de cookies() ici).
+const THEME_SCRIPT = `(function(){try{var m=matchMedia("(prefers-color-scheme: dark)"),d=document.documentElement;function s(){var t=localStorage.getItem("theme");d.dataset.theme=t==="light"||t==="dark"?t:m.matches?"dark":"light"}s();m.addEventListener("change",s);var l=document.cookie.match(/(?:^|; )${LOCALE_COOKIE}=(fr|en|zh)(?:;|$)/);if(l)d.lang=l[1]==="zh"?"zh-CN":l[1]}catch(e){}})()`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
@@ -48,17 +53,28 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         />
       </head>
       <body className="min-h-full flex flex-col">
-        {children}
-        {/* Mention exigée par Riot Games pour les projets de fans (pings et émotes, voir THIRD_PARTY_NOTICES.md) */}
-        <footer className="px-4 pb-4 pt-8 text-center text-[0.65rem] leading-relaxed text-muted opacity-70">
-          Icônes de pings, sons et émotes © Riot Games, Inc., via le projet lolPing. Clarity n&apos;est pas approuvé par
-          Riot Games et ne reflète pas les opinions de Riot Games.
-          <br />
-          <Link href="/legal" className="underline-offset-4 hover:text-foreground hover:underline">
-            Mentions légales · Conditions · Confidentialité
-          </Link>
-        </footer>
+        {/* La langue vient d'un cookie (lecture dynamique) : tout le contenu est rendu sous ce Suspense */}
+        <Suspense fallback={<div className="flex-1" />}>
+          <LocaleRoot>{children}</LocaleRoot>
+        </Suspense>
       </body>
     </html>
+  );
+}
+
+async function LocaleRoot({ children }: { children: React.ReactNode }) {
+  const { t, locale } = await getT();
+  return (
+    <I18nProvider locale={locale}>
+      {children}
+      {/* Mention exigée par Riot Games pour les projets de fans (pings et émotes, voir THIRD_PARTY_NOTICES.md) */}
+      <footer className="px-4 pb-4 pt-8 text-center text-[0.65rem] leading-relaxed text-muted opacity-70">
+        {t.footer.riot}
+        <br />
+        <Link href="/legal" className="underline-offset-4 hover:text-foreground hover:underline">
+          {t.footer.legal}
+        </Link>
+      </footer>
+    </I18nProvider>
   );
 }

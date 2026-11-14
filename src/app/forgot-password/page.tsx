@@ -5,7 +5,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ResetOnLeave } from "@/components/auth/reset-on-leave";
 import { createClient } from "@/lib/supabase/client";
-import { authErrorMessage, isPasswordValid } from "@/lib/auth-errors";
+import { isPasswordValid } from "@/lib/auth-errors";
+import { authErrorText } from "@/lib/i18n/auth";
+import { useT } from "@/lib/i18n/client";
 import {
   AuthCard,
   CodeInput,
@@ -32,6 +34,8 @@ export default function ForgotPasswordPage() {
 function ForgotPasswordFlow() {
   const router = useRouter();
   const supabase = createClient();
+  const { t } = useT();
+  const authErrorMessage = (e: Parameters<typeof authErrorText>[0]) => authErrorText(e, t);
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -52,7 +56,7 @@ function ForgotPasswordFlow() {
       return false;
     }
     // Par sécurité, Supabase ne dit pas si le compte existe.
-    setInfo(`Si un compte existe pour ${email}, un code vient d'être envoyé.`);
+    setInfo(t.auth.codeSentIfExists(email));
     setStep("code");
     return true;
   }
@@ -83,9 +87,9 @@ function ForgotPasswordFlow() {
   if (step === "password") {
     const canSave = isPasswordValid(password) && password === confirm && !loading;
     return (
-      <AuthCard title="Nouveau mot de passe" subtitle={`Pour le compte ${email}.`}>
+      <AuthCard title={t.auth.newPasswordTitle} subtitle={t.auth.forAccount(email)}>
         <form onSubmit={savePassword} className="space-y-4">
-          <Field label="Nouveau mot de passe">
+          <Field label={t.auth.newPassword}>
             {(id) => (
               <>
                 <PasswordInput
@@ -99,7 +103,7 @@ function ForgotPasswordFlow() {
               </>
             )}
           </Field>
-          <Field label="Confirme le mot de passe">
+          <Field label={t.auth.confirmPassword}>
             {(id) => (
               <>
                 <PasswordInput
@@ -110,14 +114,14 @@ function ForgotPasswordFlow() {
                 />
                 {confirm.length > 0 && password !== confirm && (
                   <p className="text-xs text-danger">
-                    Les mots de passe ne correspondent pas.
+                    {t.auth.passwordsDontMatch}
                   </p>
                 )}
               </>
             )}
           </Field>
           <button disabled={!canSave} className={primaryButton}>
-            {loading ? "Enregistrement…" : "Enregistrer et me connecter"}
+            {loading ? t.common.saving : t.auth.saveAndLogin}
           </button>
         </form>
         <Message type="error">{error}</Message>
@@ -127,11 +131,11 @@ function ForgotPasswordFlow() {
 
   if (step === "code") {
     return (
-      <AuthCard title="Saisis le code" subtitle="Le code à 6 chiffres reçu par email.">
+      <AuthCard title={t.auth.codeTitle} subtitle={t.auth.codeSubtitle}>
         <form onSubmit={verify} className="space-y-3">
           <CodeInput value={code} onChange={setCode} />
           <button disabled={loading || code.length !== 6} className={primaryButton}>
-            {loading ? "Vérification…" : "Valider"}
+            {loading ? t.auth.verifying : t.auth.validate}
           </button>
           <ResendButton onResend={() => sendCode()} />
           <button
@@ -144,7 +148,7 @@ function ForgotPasswordFlow() {
             }}
             className="w-full text-sm text-muted transition hover:text-foreground"
           >
-            Modifier mon email
+            {t.auth.changeEmail}
           </button>
         </form>
         <Message type="error">{error}</Message>
@@ -155,16 +159,16 @@ function ForgotPasswordFlow() {
 
   return (
     <AuthCard
-      title="Mot de passe oublié"
-      subtitle="On t'envoie un code par email pour choisir un nouveau mot de passe."
+      title={t.auth.forgotTitle}
+      subtitle={t.auth.forgotSubtitle}
       footer={
         <Link href="/login" className={linkClass}>
-          Retour à la connexion
+          {t.auth.backToLogin}
         </Link>
       }
     >
       <form onSubmit={sendCode} className="space-y-4">
-        <Field label="Email">
+        <Field label={t.auth.email}>
           {(id) => (
             <input
               id={id}
@@ -174,13 +178,13 @@ function ForgotPasswordFlow() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value.trim())}
-              placeholder="toi@exemple.com"
+              placeholder={t.auth.emailPlaceholder}
               className={inputClass}
             />
           )}
         </Field>
         <button disabled={loading} className={primaryButton}>
-          {loading ? "Envoi…" : "Recevoir un code"}
+          {loading ? t.auth.sending : t.auth.receiveCode}
         </button>
       </form>
       <Message type="error">{error}</Message>

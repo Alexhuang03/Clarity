@@ -31,11 +31,20 @@ export async function processDocument(documentId: string) {
     if (downloadError) throw downloadError;
     const bytes = new Uint8Array(await file.arrayBuffer());
 
-    const { pages, pageCount } = await extractDocument(bytes, doc.mime_type, doc.filename, async (progress) => {
+    const { pages, pageCount, figures } = await extractDocument(bytes, doc.mime_type, doc.filename, async (progress) => {
       await setStatus({ progress });
     });
-    // Cours en Markdown (lien GitHub, page web...) : les schémas sont décrits par l'IA, sinon elle ne voit que leur nom
-    if (doc.mime_type === "text/markdown" || /\.md$/i.test(doc.filename)) {
+    if (figures?.size) {
+      // Word / PowerPoint : images intégrées décrites par l'IA (sinon le texte n'en garde que la légende)
+      // Toutes les pages d'un coup : les images sont décrites par lots de 3 (et non une requête par diapositive)
+      const marker = (i: number) => `\n\n@@CLARITY-PAGE-${i}@@\n\n`;
+      const joined = pages.map((p, i) => `${p.text}${marker(i)}`).join("");
+      const described = await describeFigures(joined, undefined, async (href) => figures.get(href) ?? null);
+      const texts = described.split(/\n*@@CLARITY-PAGE-\d+@@\n*/);
+      if (texts.length >= pages.length) pages.forEach((p, i) => (p.text = texts[i].trim()));
+      await setStatus({ progress: 80 });
+    } else if (doc.mime_type === "text/markdown" || /\.md$/i.test(doc.filename)) {
+      // Cours en Markdown (lien GitHub, page web...) : les schémas sont décrits par l'IA, sinon elle ne voit que leur nom
       for (const page of pages) {
         page.text = await describeFigures(page.text, async (done, total) => {
           await setStatus({ progress: 5 + Math.round((75 * done) / total) });

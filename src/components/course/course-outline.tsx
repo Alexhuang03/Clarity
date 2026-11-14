@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { DocumentRow, MessageRow, PartRow } from "@/lib/course/types";
+import { useT } from "@/lib/i18n/client";
 import { DocumentList } from "./documents";
 import { summaryHeadings } from "./markdown";
 
@@ -34,6 +35,7 @@ export const CourseOutline = memo(function CourseOutline({
   /** Appelé avant de défiler vers un titre (ex. fermer le panneau sur mobile) */
   onNavigate?: () => void;
 }) {
+  const { t } = useT();
   function go(id: string) {
     onNavigate?.();
     // Une image plus tard : le panneau est fermé et la page peut défiler
@@ -46,14 +48,14 @@ export const CourseOutline = memo(function CourseOutline({
         .filter((m) => m.role === "assistant" && m.kind === "summary")
         .map((m) => ({
           id: m.id,
-          title: parts.find((p) => p.id === m.part_id)?.title ?? "Résumé",
+          title: parts.find((p) => p.id === m.part_id)?.title ?? t.course.summary,
           // Les grandes sections (##) seulement : les sous-titres encombrent le sommaire
           sections: summaryHeadings(m.id, m.content)
             .filter((h) => h.level === 2)
             .map((h) => ({ id: h.id, text: stripEmoji(h.text) })),
         }))
         .filter((g) => g.sections.length > 0),
-    [messages, parts],
+    [messages, parts, t.course.summary],
   );
   const active = useActiveHeading(groups.flatMap((g) => g.sections.map((s) => s.id)));
   const activeGroup = groups.find((g) => g.sections.some((s) => s.id === active))?.id ?? groups[0]?.id;
@@ -69,16 +71,16 @@ export const CourseOutline = memo(function CourseOutline({
   const single = groups.length === 1;
 
   return (
-    <nav ref={navRef} aria-label="Sommaire du cours" className="text-[0.8125rem] leading-snug">
+    <nav ref={navRef} aria-label={t.course.outlineLabel} className="text-[0.8125rem] leading-snug">
       {showDocs && (
-        <section className={groups.length ? "mb-8" : ""} aria-label="Documents">
+        <section className={groups.length ? "mb-8" : ""} aria-label={t.course.documentsTitle}>
           <p className="mb-2 text-[0.6875rem] font-medium uppercase tracking-[0.12em] opacity-40">
-            Documents <span className="tabular-nums">({documents.length})</span>
+            {t.course.documentsTitle} <span className="tabular-nums">({documents.length})</span>
           </p>
           <DocumentList documents={documents} onChange={onDocumentsChange} onSettled={onDocumentsSettled} />
         </section>
       )}
-      {groups.length > 0 && <p className="mb-4 text-[0.6875rem] font-medium uppercase tracking-[0.12em] opacity-40">Sommaire</p>}
+      {groups.length > 0 && <p className="mb-4 text-[0.6875rem] font-medium uppercase tracking-[0.12em] opacity-40">{t.course.outline}</p>}
       <ol className="space-y-1">
         {groups.map((group, i) => {
           const open = single || group.id === activeGroup;

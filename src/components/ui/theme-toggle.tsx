@@ -1,5 +1,7 @@
 "use client";
 
+import { useT } from "@/lib/i18n/client";
+
 /** Durée du fondu lors du changement de thème */
 const FADE_MS = 700;
 
@@ -9,6 +11,7 @@ const FADE_MS = 700;
  * ni de décalage entre le rendu serveur et le navigateur.
  */
 export function ThemeToggle({ className = "" }: { className?: string }) {
+  const { t } = useT();
   function toggle() {
     const root = document.documentElement;
     const next = root.dataset.theme === "dark" ? "light" : "dark";
@@ -48,8 +51,8 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
     <button
       type="button"
       onClick={toggle}
-      aria-label="Changer de thème (clair / sombre)"
-      title="Thème clair / sombre"
+      aria-label={t.common.theme}
+      title={t.common.themeTitle}
       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full opacity-60 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10 ${className}`}
     >
       {/* Thème clair : lune (passer en sombre) */}

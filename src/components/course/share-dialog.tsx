@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { getCourseShare, shareCourse, unshareCourse, type CourseShare } from "@/app/courses/actions";
+import { useT } from "@/lib/i18n/client";
 
 /**
  * Bouton « Partager » : ouvre une fenêtre qui crée un lien en lecture seule vers le cours.
@@ -27,6 +28,7 @@ export function ShareButton({
   const [pending, startTransition] = useTransition();
   // La fenêtre n'est créée qu'au premier clic, hors de la carte (dont l'opacité varie au survol)
   const [mounted, setMounted] = useState(false);
+  const { t, intl } = useT();
 
   const url = share ? `${window.location.origin}${share.path}` : "";
 
@@ -48,7 +50,7 @@ export function ShareButton({
   }
 
   function remove() {
-    if (!confirm("Supprimer le lien ? Les personnes qui l'ont ne pourront plus voir ce cours.")) return;
+    if (!confirm(t.share.removeConfirm)) return;
     startTransition(async () => {
       await unshareCourse(courseId);
       setShare(null);
@@ -66,8 +68,8 @@ export function ShareButton({
         type="button"
         onClick={open}
         className={className}
-        aria-label={`Partager le cours ${title}`}
-        title="Partager"
+        aria-label={t.share.button(title)}
+        title={t.share.buttonTitle}
       >
         {children}
       </button>
@@ -81,32 +83,28 @@ export function ShareButton({
             onClose={() => setMounted(false)}
             // Clic sur le fond : ferme la fenêtre
             onClick={(e) => e.target === dialogRef.current && dialogRef.current?.close()}
-            className="m-auto w-[min(32rem,calc(100%-2rem))] rounded-2xl border border-black/10 bg-[var(--background)] p-0 text-[var(--foreground)] shadow-xl backdrop:bg-black/40 dark:border-white/15"
+            className="m-auto w-[min(32rem,calc(100%-2rem))] rounded-[var(--radius-card)] border border-line bg-surface p-0 text-foreground shadow-pop backdrop:bg-black/40 backdrop:backdrop-blur-sm"
           >
             <div className="space-y-4 p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <h2 className="text-lg font-semibold">Partager le cours</h2>
-                  <p className="truncate text-sm opacity-60">{title}</p>
+                  <h2 className="text-lg font-semibold">{t.share.title}</h2>
+                  <p className="truncate text-sm text-muted">{title}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => dialogRef.current?.close()}
-                  aria-label="Fermer"
-                  className="rounded-lg px-2 py-1 opacity-60 hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
+                  aria-label={t.common.close}
+                  className="rounded-lg px-2 py-1 text-muted hover:bg-surface-2 hover:text-foreground"
                 >
                   ✕
                 </button>
               </div>
 
-              <p className="text-sm opacity-70">
-                Toute personne qui a le lien peut lire les résumés et la conversation, sans pouvoir les modifier. Tes
-                fichiers originaux restent privés. Les messages envoyés après le partage n&apos;apparaissent qu&apos;une
-                fois le lien mis à jour.
-              </p>
+              <p className="text-sm text-muted">{t.share.explanation}</p>
 
               {share === undefined ? (
-                <div className="h-10 animate-pulse rounded-lg bg-black/5 dark:bg-white/10" />
+                <div className="h-10 animate-pulse rounded-lg bg-surface-2" />
               ) : share ? (
                 <>
                   <div className="flex gap-2">
@@ -114,42 +112,43 @@ export function ShareButton({
                       readOnly
                       value={url}
                       onFocus={(e) => e.currentTarget.select()}
-                      aria-label="Lien de partage"
-                      className="min-w-0 flex-1 rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-white/20"
+                      aria-label={t.share.linkLabel}
+                      className="field min-w-0 flex-1 text-sm"
                     />
                     <button
                       type="button"
                       onClick={copy}
-                      className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+                      className="btn btn-primary"
                     >
-                      {copied ? "Copié ✓" : "Copier"}
+                      {copied ? t.share.copied : t.share.copy}
                     </button>
                   </div>
-                  <p className="text-xs opacity-60">
-                    Partagé le{" "}
-                    {new Date(share.sharedAt).toLocaleString("fr-FR", {
-                      day: "numeric",
-                      month: "short",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                  <p className="text-xs text-muted">
+                    {t.share.sharedOn(
+                      new Date(share.sharedAt).toLocaleString(intl, {
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      }),
+                    )}
                   </p>
                   <div className="flex flex-wrap justify-between gap-2">
                     <button
                       type="button"
                       onClick={remove}
                       disabled={pending}
-                      className="rounded-lg px-3 py-1.5 text-sm text-red-600 hover:bg-red-500/10 disabled:opacity-40"
+                      className="btn px-3 py-1.5 text-danger hover:bg-red-500/10"
                     >
-                      Supprimer le lien
+                      {t.share.removeLink}
                     </button>
                     <button
                       type="button"
                       onClick={create}
                       disabled={pending}
-                      className="rounded-lg border border-black/15 px-3 py-1.5 text-sm hover:bg-black/5 disabled:opacity-40 dark:border-white/20 dark:hover:bg-white/10"
+                      className="btn btn-secondary px-3 py-1.5"
                     >
-                      {pending ? "Mise à jour…" : "Mettre à jour le lien"}
+                      {pending ? t.share.updating : t.share.update}
                     </button>
                   </div>
                 </>
@@ -158,14 +157,14 @@ export function ShareButton({
                   type="button"
                   onClick={create}
                   disabled={pending}
-                  className="w-full rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                  className="btn btn-primary w-full py-2.5"
                 >
-                  {pending ? "Création du lien…" : "Créer un lien de partage"}
+                  {pending ? t.share.creatingLink : t.share.create}
                 </button>
               )}
 
               {error && (
-                <p role="alert" className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+                <p role="alert" className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-danger">
                   {error}
                 </p>
               )}

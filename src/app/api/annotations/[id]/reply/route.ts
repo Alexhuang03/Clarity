@@ -146,7 +146,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/annotations
     const answer = await streamAnswer(
       modelChain("chat", course.chatModel),
       {
-        system: bubblePrompt(kind, course.level, { quote, context, sources: formatSources(sources, chunks) }),
+        system: bubblePrompt(kind, course.level, { quote, context, sources: formatSources(sources, chunks) }, course.locale),
         messages,
         maxTokens: 1500,
       },

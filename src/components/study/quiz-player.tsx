@@ -14,6 +14,7 @@ import type {
 import { errorMessage, studyApi } from "./api";
 import { ProgressStepper } from "./progress-stepper";
 import { ErrorNote, Generating, Md } from "./ui";
+import { useT } from "@/lib/i18n/client";
 
 const LETTERS = "ABCDEFGHIJ";
 
@@ -71,13 +72,14 @@ function Countdown({ deadlineAt, onExpire }: { deadlineAt: string; onExpire: () 
     return () => clearInterval(timer);
   }, [deadline]);
   const remaining = (deadline - now) / 1000;
+  const { t } = useT();
   const urgent = remaining <= 60;
   const warning = remaining <= 300;
   return (
     <div
       role="timer"
       aria-live={urgent ? "assertive" : "off"}
-      aria-label={`Temps restant ${formatClock(remaining)}`}
+      aria-label={t.study.timeLeft(formatClock(remaining))}
       className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 font-mono text-sm tabular-nums transition-colors ${
         urgent
           ? "animate-pulse border-red-500/40 bg-red-500/10 text-danger motion-reduce:animate-none"
@@ -104,12 +106,13 @@ function QuestionInput({
   value: AnswerValue | undefined;
   onChange: (value: AnswerValue) => void;
 }) {
+  const { t } = useT();
   if (question.type === "single" || question.type === "multiple") {
     const multiple = question.type === "multiple";
     const selected = multiple ? ((value as number[] | undefined) ?? []) : value;
     return (
       <div role={multiple ? "group" : "radiogroup"} className="space-y-2">
-        {multiple && <p className="text-xs text-muted">Plusieurs réponses possibles.</p>}
+        {multiple && <p className="text-xs text-muted">{t.study.severalAnswers}</p>}
         {question.choices.map((choice, i) => {
           const checked = multiple ? (selected as number[]).includes(i) : selected === i;
           return (
@@ -162,7 +165,7 @@ function QuestionInput({
               value === v ? "border-accent/60 bg-accent-soft text-accent-text" : "border-line bg-surface hover:bg-surface-2"
             }`}
           >
-            {v ? "Vrai" : "Faux"}
+            {v ? t.study.true : t.study.false}
           </button>
         ))}
       </div>
@@ -176,8 +179,8 @@ function QuestionInput({
         onChange={(e) => onChange(e.target.value)}
         maxLength={6000}
         rows={open ? 8 : 2}
-        placeholder={open ? "Rédige ta réponse : structure, justifie, illustre…" : "Ta réponse en quelques mots"}
-        aria-label="Ta réponse"
+        placeholder={open ? t.study.openPlaceholder : t.study.shortPlaceholder}
+        aria-label={t.study.yourAnswer}
         className="field resize-y leading-relaxed"
       />
       {open && (
@@ -218,6 +221,7 @@ export function QuizPlayer({
   const [confirm, setConfirm] = useState(false);
   const [timeUp, setTimeUp] = useState(false);
   const reduce = useReducedMotion();
+  const { t } = useT();
   const answersRef = useRef(answers);
   // Remise automatique (fin du chrono) : une seule fois, même si elle échoue (sinon relance en boucle)
   const autoSubmitted = useRef(false);
@@ -265,12 +269,12 @@ export function QuizPlayer({
         onGraded(res.attempt);
         return;
       }
-      setError("La correction n'est pas encore disponible. Réessaie.");
+      setError(t.study.notGradedYet);
     } catch (e) {
       setError(errorMessage(e));
     }
     setSubmitting(false);
-  }, [courseId, quiz.id, attempt.id, onGraded]);
+  }, [courseId, quiz.id, attempt.id, onGraded, t]);
 
   const go = (next: number) => {
     setDirection(next > index ? 1 : -1);
@@ -280,14 +284,8 @@ export function QuizPlayer({
   if (submitting) {
     return (
       <Generating
-        label={needsAi ? "Correction en cours…" : "Correction…"}
-        hint={
-          timeUp
-            ? "Temps écoulé : ta copie a été remise automatiquement. Clarity la corrige."
-            : needsAi
-              ? "Les réponses rédigées sont corrigées par l'IA selon le barème : cela peut prendre jusqu'à une minute."
-              : "Un instant…"
-        }
+        label={needsAi ? t.study.grading : t.study.gradingShort}
+        hint={timeUp ? t.study.timeUp : needsAi ? t.study.gradingAi : t.study.oneMoment}
       />
     );
   }
@@ -296,7 +294,7 @@ export function QuizPlayer({
     <div className="mx-auto max-w-2xl">
       <div className="mb-6 flex items-center justify-between gap-3">
         <button type="button" onClick={onQuit} className="btn btn-ghost -ml-3 px-3 py-1.5 font-normal">
-          ← Quitter
+          {t.study.quit}
         </button>
         {attempt.deadlineAt && (
           <Countdown
@@ -331,9 +329,9 @@ export function QuizPlayer({
             <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted">
               <span className="rounded-full bg-surface-2 px-2 py-0.5">{question.concept}</span>
               <span>
-                {question.points} point{question.points > 1 ? "s" : ""}
+                {t.study.points(question.points)}
               </span>
-              {question.type === "open" && <span>· question ouverte</span>}
+              {question.type === "open" && <span>{t.study.openQuestion}</span>}
             </div>
             <Md text={question.prompt} className="mb-6 text-[1.05rem] font-medium [&_.prose]:text-[1.05rem]" />
             <QuestionInput
@@ -351,22 +349,22 @@ export function QuizPlayer({
 
       <div className="mt-6 flex items-center justify-between gap-3 border-t border-line pt-6">
         <button type="button" onClick={() => go(index - 1)} disabled={index === 0} className="btn btn-ghost">
-          ← Précédente
+          {t.study.previous}
         </button>
         {index < questions.length - 1 ? (
           <button type="button" onClick={() => go(index + 1)} className="btn btn-primary">
-            Suivante →
+            {t.study.next}
           </button>
         ) : confirm ? (
           <span className="flex flex-wrap items-center justify-end gap-2 text-sm">
             <span className="text-muted">
-              {questions.length - answeredCount} sans réponse. Remettre quand même ?
+              {t.study.unansweredConfirm(questions.length - answeredCount)}
             </span>
             <button type="button" onClick={() => void submit()} className="btn btn-primary">
-              Remettre
+              {t.study.submit}
             </button>
             <button type="button" onClick={() => setConfirm(false)} className="btn btn-ghost">
-              Continuer
+              {t.study.continue}
             </button>
           </span>
         ) : (
@@ -375,7 +373,7 @@ export function QuizPlayer({
             onClick={() => (answeredCount < questions.length ? setConfirm(true) : void submit())}
             className="btn btn-primary"
           >
-            Remettre ma copie
+            {t.study.submitCopy}
           </button>
         )}
       </div>

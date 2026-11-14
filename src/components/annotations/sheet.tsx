@@ -3,7 +3,8 @@
 import { useEffect, useRef } from "react";
 import { pingIconUrl, type PingAction, type PingDef } from "@/lib/annotations/lol";
 import { HIGHLIGHT_SWATCH, isThreadKind, type AnnotationRow } from "@/lib/annotations/types";
-import { BubblePreview, KIND_LABEL, type Pending } from "./threads";
+import { useT } from "@/lib/i18n/client";
+import { BubblePreview, type Pending } from "./threads";
 
 // Fermer en glissant vers le bas : au-delà de cette distance, le panneau se ferme
 const CLOSE_DRAG = 90;
@@ -25,6 +26,7 @@ export function BottomSheet({
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const drag = useRef<{ y: number; dy: number } | null>(null);
+  const { t } = useT();
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -84,7 +86,7 @@ export function BottomSheet({
           <div className="mt-2 flex w-full items-center gap-2">
             {onBack && (
               <button type="button" onClick={onBack} onPointerDown={(e) => e.stopPropagation()} className="rounded-lg px-1.5 py-0.5 text-sm text-indigo-600 hover:bg-indigo-500/10 dark:text-indigo-400">
-                ← Retour
+                ← {t.common.back}
               </button>
             )}
             <span className="flex-1 truncate text-sm font-semibold">{title}</span>
@@ -93,7 +95,7 @@ export function BottomSheet({
               onClick={onClose}
               onPointerDown={(e) => e.stopPropagation()}
               className="rounded-lg px-2 py-0.5 text-lg leading-none opacity-50 hover:opacity-100"
-              aria-label="Fermer le panneau"
+              aria-label={t.annotations.closePanel}
             >
               ✕
             </button>
@@ -117,8 +119,9 @@ export function AnnotationList({
   pending: Record<string, Pending>;
   onPick: (a: AnnotationRow) => void;
 }) {
+  const { t } = useT();
   if (!annotations.length) {
-    return <p className="py-6 text-center text-sm opacity-60">Aucune discussion pour l&apos;instant. Sélectionne un passage pour en démarrer une.</p>;
+    return <p className="py-6 text-center text-sm opacity-60">{t.annotations.noDiscussion}</p>;
   }
   return (
     <ul className="space-y-2">
@@ -135,7 +138,7 @@ export function AnnotationList({
             {isThreadKind(a.kind) ? (
               <>
                 <BubblePreview annotation={a} ping={pings[a.kind]} pending={pending[a.id]} />
-                <p className="mt-1 line-clamp-1 text-xs italic opacity-50">« {a.anchor.quote} »</p>
+                <p className="mt-1 line-clamp-1 text-xs italic opacity-50">{t.annotations.quote(a.anchor.quote)}</p>
               </>
             ) : (
               <span className="flex items-center gap-2">
@@ -145,8 +148,8 @@ export function AnnotationList({
                   // eslint-disable-next-line @next/next/no-img-element -- icône du ping
                   <img src={pingIconUrl(pings.highlight.icon)} alt="" className="h-4 w-4" />
                 )}
-                <span className="text-[0.65rem] font-semibold uppercase tracking-wide opacity-60">{KIND_LABEL[a.kind]}</span>
-                <span className="line-clamp-1 flex-1 text-sm italic">« {a.anchor.quote} »</span>
+                <span className="text-[0.65rem] font-semibold uppercase tracking-wide opacity-60">{t.annotations.kind[a.kind]}</span>
+                <span className="line-clamp-1 flex-1 text-sm italic">{t.annotations.quote(a.anchor.quote)}</span>
               </span>
             )}
           </button>
