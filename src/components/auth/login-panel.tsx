@@ -7,24 +7,28 @@ import { createClient } from "@/lib/supabase/client";
 import { safeNextPath } from "@/lib/auth-errors";
 import { authErrorText } from "@/lib/i18n/auth";
 import { useT } from "@/lib/i18n/client";
-import { LoginPresentation } from "@/components/auth/presentation";
 import { syncLocaleAfterLogin } from "@/app/account/locale-actions";
-import {
-  AuthCard,
-  CodeInput,
-  Field,
-  Message,
-  PasswordInput,
-  ResendButton,
-  inputClass,
-  linkClass,
-  primaryButton,
-} from "@/components/auth/ui";
+import { CodeInput, Field, Message, PasswordInput, ResendButton, inputClass, linkClass, primaryButton } from "./ui";
 
-export function LoginForm() {
+/** Titre et sous-titre d'un panneau de la carte de connexion / inscription */
+export function PanelHeading({ title, subtitle }: { title: string; subtitle?: React.ReactNode }) {
+  return (
+    <div className="mb-6">
+      <h3 className="text-xl font-semibold tracking-tight">{title}</h3>
+      {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
+    </div>
+  );
+}
+
+/**
+ * Connexion par email et mot de passe. Compte jamais vérifié : un code est renvoyé et vérifié ici.
+ * Ensuite : langue du compte appliquée (syncLocaleAfterLogin), puis redirection vers ?next= (ou l'accueil).
+ * Lit ?next= : doit être rendu sous <Suspense>.
+ */
+export function LoginPanel({ onSwitchToSignup }: { onSwitchToSignup: () => void }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const supabase = createClient();
+  const [supabase] = useState(createClient);
   const { t } = useT();
   const authErrorMessage = (e: Parameters<typeof authErrorText>[0]) => authErrorText(e, t);
   const [step, setStep] = useState<"form" | "verify">("form");
@@ -53,11 +57,7 @@ export function LoginForm() {
       setLoading(false);
       const recentlySent = resendError?.code === "over_email_send_rate_limit";
       if (resendError && !recentlySent) return setError(authErrorMessage(resendError));
-      setInfo(
-        recentlySent
-          ? t.auth.notVerifiedRecent(email)
-          : t.auth.notVerifiedSent(email),
-      );
+      setInfo(recentlySent ? t.auth.notVerifiedRecent(email) : t.auth.notVerifiedSent(email));
       return setStep("verify");
     }
     setLoading(false);
@@ -88,7 +88,8 @@ export function LoginForm() {
 
   if (step === "verify") {
     return (
-      <AuthCard title={t.auth.verifyTitle} subtitle={t.auth.verifySubtitle}>
+      <>
+        <PanelHeading title={t.auth.verifyTitle} subtitle={t.auth.verifySubtitle} />
         <form onSubmit={verify} className="space-y-3">
           <CodeInput value={code} onChange={setCode} />
           <button disabled={loading || code.length !== 6} className={primaryButton}>
@@ -98,23 +99,13 @@ export function LoginForm() {
         </form>
         <Message type="error">{error}</Message>
         <Message type="info">{info}</Message>
-      </AuthCard>
+      </>
     );
   }
 
   return (
-    <AuthCard
-      title={t.auth.loginTitle}
-      aside={<LoginPresentation />}
-      footer={
-        <>
-          {t.auth.noAccount}{" "}
-          <Link href="/signup" className={linkClass}>
-            {t.auth.createAccountLink}
-          </Link>
-        </>
-      }
-    >
+    <>
+      <PanelHeading title={t.auth.loginTitle} />
       <form onSubmit={signIn} className="space-y-4">
         <Field label={t.auth.email}>
           {(id) => (
@@ -122,7 +113,6 @@ export function LoginForm() {
               id={id}
               type="email"
               required
-              autoFocus
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value.trim())}
@@ -132,14 +122,7 @@ export function LoginForm() {
           )}
         </Field>
         <Field label={t.auth.password}>
-          {(id) => (
-            <PasswordInput
-              id={id}
-              value={password}
-              onChange={setPassword}
-              autoComplete="current-password"
-            />
-          )}
+          {(id) => <PasswordInput id={id} value={password} onChange={setPassword} autoComplete="current-password" />}
         </Field>
         <div className="-mt-2 text-right text-sm">
           <Link href="/forgot-password" className={linkClass}>
@@ -151,6 +134,12 @@ export function LoginForm() {
         </button>
       </form>
       <Message type="error">{error}</Message>
-    </AuthCard>
+      <p className="mt-6 text-center text-sm text-muted">
+        {t.auth.noAccount}{" "}
+        <button type="button" onClick={onSwitchToSignup} className={linkClass}>
+          {t.auth.createAccountLink}
+        </button>
+      </p>
+    </>
   );
 }
