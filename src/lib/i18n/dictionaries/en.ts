@@ -136,7 +136,7 @@ export const en: Dictionary = {
   },
 
   teach: {
-    placeholder: "What do you want to learn? E.g. Pythagoras' theorem, high-school level",
+    placeholder: "What do you want to learn?",
     send: "Generate the course",
     sendTitle: "Clarity writes a complete course on this topic, with web sources",
     context: "Teacher mode · Clarity writes the course from web sources",
