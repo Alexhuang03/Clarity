@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
 import { useT } from "@/lib/i18n/client";
 import { TEACH_GOAL_MAX, TEACH_LEVEL_MAX, TEACH_TOPIC_MAX } from "@/lib/teach/types";
+import ShinyText from "@/components/reactbits/ShinyText";
+import { Spotlight } from "@/components/ui/spotlight";
 
 const TOPIC_MIN = 3;
 /** Valeur interne du choix « Autre » (niveau libre) */
@@ -64,7 +66,7 @@ export function TeachForm() {
       setPending(false);
       return setError(t.teach.errorNetwork);
     }
-    const data = (await response.json().catch(() => null)) as { courseId?: unknown } | null;
+    const data = (await response.json().catch(() => null)) as { courseId?: unknown; error?: unknown } | null;
     const courseId = typeof data?.courseId === "string" ? data.courseId : "";
     // Identifiant attendu : un UUID (jamais d'adresse arbitraire passée à router.push)
     if (response.ok && /^[0-9a-f-]{8,64}$/i.test(courseId)) {
@@ -73,14 +75,16 @@ export function TeachForm() {
       return;
     }
     setPending(false);
+    const serverError = typeof data?.error === "string" ? data.error : null;
     setError(
-      response.status === 429
-        ? t.teach.errorQuota
-        : response.status === 401
-          ? t.teach.errorAuth
-          : response.status === 400
-            ? t.teach.errorInvalid
-            : t.teach.errorServer,
+      serverError ||
+        (response.status === 429
+          ? t.teach.errorQuota
+          : response.status === 401
+            ? t.teach.errorAuth
+            : response.status === 400
+              ? t.teach.errorInvalid
+              : t.teach.errorServer),
     );
   }
 
@@ -91,7 +95,7 @@ export function TeachForm() {
   }
 
   return (
-    <section aria-labelledby={`${id}-title`} className="card rise-in relative mb-10 overflow-hidden p-5 sm:p-7">
+    <Spotlight aria-labelledby={`${id}-title`} className="rise-in relative mb-10 overflow-hidden p-5 sm:p-7 shadow-card">
       {/* Halo décoratif, discret, dans le coin */}
       <div
         aria-hidden
@@ -100,7 +104,7 @@ export function TeachForm() {
       <div className="relative">
         <p className="eyebrow flex items-center gap-1.5">
           {sparkle}
-          {t.teach.eyebrow}
+          <ShinyText text={t.teach.eyebrow} speed={3} className="text-xs font-semibold uppercase tracking-wider text-accent-text" />
         </p>
         <h2 id={`${id}-title`} className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">
           {t.teach.title}
@@ -248,6 +252,6 @@ export function TeachForm() {
           <p className="mt-3 text-xs text-muted opacity-80">{t.teach.disclaimer}</p>
         </form>
       </div>
-    </section>
+    </Spotlight>
   );
 }

@@ -38,7 +38,7 @@ const CHAINS: Record<"summary" | "chat" | "light" | "analysis" | "vision" | "fig
   // Mode professeur. Le quota gratuit de Flash (~20 requêtes/jour) est partagé avec les résumés : Flash seulement
   // pour le plan (1 appel), Flash-Lite en tête pour les chapitres (jusqu'à 8 appels). Recherche web (Grounding with
   // Google Search) : Gemini uniquement, Flash-Lite compris.
-  teachPlan: [FLASH[0], FLASH[1], FLASH_LITE[0], FLASH_LITE[1]],
+  teachPlan: [FLASH_LITE[0], FLASH_LITE[1], "groq:openai/gpt-oss-120b", FLASH[0]],
   teach: [FLASH_LITE[0], FLASH_LITE[1], FLASH[0], FLASH[1]],
   // Rédaction d'un chapitre sans recherche Google (secours Wikipédia ou de mémoire) : gpt-oss-120b en secours
   teachWrite: [FLASH_LITE[0], FLASH_LITE[1], "groq:openai/gpt-oss-120b", FLASH[0]],

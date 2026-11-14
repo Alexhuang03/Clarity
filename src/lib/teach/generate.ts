@@ -50,20 +50,21 @@ const clean = (value: unknown, max: number) =>
 function parsePlan(raw: string): CoursePlan | null {
   try {
     const json = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)) as Record<string, unknown>;
-    const chapters = (Array.isArray(json.chapters) ? json.chapters : [])
-      .map((c: { title?: unknown; points?: unknown; query?: unknown }) => ({
-        title: clean(c?.title, 120),
-        query: clean(c?.query, 100),
-        points: (Array.isArray(c?.points) ? c.points : []).map((p: unknown) => clean(p, 300)).filter(Boolean).slice(0, 8),
+    const rawChapters = Array.isArray(json.chapters) ? json.chapters : Array.isArray(json.chapitres) ? json.chapitres : Array.isArray(json.modules) ? json.modules : [];
+    const chapters = rawChapters
+      .map((c: { title?: unknown; titre?: unknown; points?: unknown; notions?: unknown; query?: unknown; recherche?: unknown }) => ({
+        title: clean(c?.title || c?.titre, 120),
+        query: clean(c?.query || c?.recherche, 100),
+        points: (Array.isArray(c?.points) ? c.points : Array.isArray(c?.notions) ? c.notions : []).map((p: unknown) => clean(p, 300)).filter(Boolean).slice(0, 8),
       }))
       .filter((c) => c.title)
       .slice(0, MAX_CHAPTERS);
     if (chapters.length === 0) return null;
     return {
-      title: clean(json.title, COURSE_TITLE_MAX),
-      subject: clean(json.subject, SUBJECT_MAX) || null,
+      title: clean(json.title || json.titre || json.titre_cours, COURSE_TITLE_MAX),
+      subject: clean(json.subject || json.matiere, SUBJECT_MAX) || null,
       chapters,
-      queries: (Array.isArray(json.queries) ? json.queries : []).map((q: unknown) => clean(q, 100)).filter(Boolean).slice(0, 3),
+      queries: (Array.isArray(json.queries) ? json.queries : Array.isArray(json.recherches) ? json.recherches : []).map((q: unknown) => clean(q, 100)).filter(Boolean).slice(0, 3),
     };
   } catch {
     return null;
@@ -168,7 +169,7 @@ export async function generateTeachCourse(courseId: string) {
     }
     if (!plan) {
       checkDeadline();
-      const res = await generateText(modelChain("summary"), planPrompt(req.locale, false), planUserMessage(req), {
+      const res = await generateText(modelChain("teachPlan"), planPrompt(req.locale, false), planUserMessage(req), {
         maxTokens: 4096,
         json: true,
         signal: deadline,
