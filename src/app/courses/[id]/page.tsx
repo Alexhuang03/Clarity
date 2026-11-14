@@ -29,7 +29,7 @@ async function CourseContent({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient();
 
   const [
-    { data: course },
+    { data: course, error: courseError },
     { data: documents },
     { data: parts },
     { data: messages },
@@ -66,6 +66,12 @@ async function CourseContent({ params }: { params: Promise<{ id: string }> }) {
       // ne doit pas empêcher d'ouvrir le cours : on l'affiche alors sans ses sources.
       getCourseWebSources(supabase, id).catch(() => null),
     ]);
+  // Une erreur de base (ex. migration non appliquée en production) n'est pas un « cours introuvable » :
+  // on la remonte (page d'erreur + journal serveur) au lieu de la masquer derrière un 404.
+  if (courseError) {
+    console.error("[cours] lecture impossible", courseError.code, courseError.message);
+    throw new Error("Lecture du cours impossible.");
+  }
   if (!course) notFound();
 
   return (

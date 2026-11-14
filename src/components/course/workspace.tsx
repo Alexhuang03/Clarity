@@ -544,7 +544,8 @@ export function Workspace({
 
         <WebSourcesContext value={webSources?.sources ?? null}>
         <div className="flex-1 space-y-10 py-8">
-          {webSources && <WebSourcesNotice data={webSources} />}
+          {/* Pendant la rédaction, « grounded » vaut encore false par défaut : pas de bandeau trompeur */}
+          {webSources && !teachDocument && <WebSourcesNotice data={webSources} />}
           {/* Cours vide : importer des documents, ou taper un sujet (mode professeur) */}
           {documents.length === 0 && <TeachEmptyState />}
 
