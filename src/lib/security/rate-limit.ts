@@ -43,6 +43,8 @@ export const RATE_LIMITS = {
   study: [{ bucket: "llm:study:min", limit: 6, windowSec: MINUTE }, { bucket: "llm:study:hour", limit: 60, windowSec: HOUR }, { bucket: "llm:study:day", limit: 200, windowSec: DAY }, LLM_DAILY],
   /** Mode professeur : génération d'un cours complet à partir d'un sujet (recherche web + 1 appel par chapitre) */
   teach: [{ bucket: "llm:teach:hour", limit: 3, windowSec: HOUR }, { bucket: "llm:teach:day", limit: 3, windowSec: DAY }, LLM_DAILY],
+  /** Recommandations de sujets d'un cours vide (petit appel, mis en cache par cours et niveau) */
+  teachSuggestions: [{ bucket: "llm:teach-suggest:min", limit: 10, windowSec: MINUTE }, { bucket: "llm:teach-suggest:day", limit: 60, windowSec: DAY }, LLM_DAILY],
   /** Appels à l'IA supplémentaires prévus par une génération du mode professeur : un seul appel, avec un coût */
   teachCall: [{ bucket: "llm:teach-calls:day", limit: 30, windowSec: DAY }, LLM_DAILY],
 } satisfies Record<string, RateRule[]>;

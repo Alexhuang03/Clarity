@@ -146,7 +146,7 @@ export const fr = {
   // Mode professeur : dans un cours vide, la barre de conversation fait rédiger le cours par l'IA à partir
   // d'un sujet, avec des sources du web
   teach: {
-    placeholder: "Que veux-tu apprendre ? Ex. le théorème de Thalès, niveau 3e",
+    placeholder: "Que veux-tu apprendre ?",
     send: "Générer le cours",
     sendTitle: "Clarity rédige un cours complet sur ce sujet, avec des sources du web",
     context: "Mode professeur · Clarity rédige le cours à partir de sources du web",
@@ -157,8 +157,7 @@ export const fr = {
     emptyTeachTitle: "Ou tape un sujet dans la barre",
     emptyTeachText:
       "Clarity rédige un cours complet, chapitre par chapitre, en citant des sources du web. Tu peux préciser ton niveau et ton objectif.",
-    examplesLabel: "Exemples :",
-    examples: ["Le théorème de Thalès", "La photosynthèse", "La guerre froide", "Les intégrales"],
+    suggestionsLabel: "Suggestions pour ce cours",
     options: "Niveau et objectif",
     levelLabel: "Niveau",
     levels: ["Collège", "Lycée", "Licence", "Master"],

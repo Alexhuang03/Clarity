@@ -134,7 +134,7 @@ export const zh: Dictionary = {
   },
 
   teach: {
-    placeholder: "你想学什么？例如：泰勒斯定理，初三水平",
+    placeholder: "你想学什么？",
     send: "生成课程",
     sendTitle: "Clarity 会根据网络来源，就这个主题撰写一门完整的课程",
     context: "老师模式 · Clarity 根据网络来源撰写课程",
@@ -144,8 +144,7 @@ export const zh: Dictionary = {
     emptyUploadText: "课件、练习、PDF、Word、PowerPoint、照片或链接：拖到页面上，或使用输入栏的 + 按钮。",
     emptyTeachTitle: "或者在输入栏输入一个主题",
     emptyTeachText: "Clarity 会逐章撰写一门完整的课程，并引用网络来源。你可以说明自己的水平和目标。",
-    examplesLabel: "示例：",
-    examples: ["泰勒斯定理", "光合作用", "冷战", "积分"],
+    suggestionsLabel: "本课程的学习建议",
     options: "水平与目标",
     levelLabel: "水平",
     levels: ["初中", "高中", "本科", "硕士"],

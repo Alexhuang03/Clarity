@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { DocumentRow } from "@/lib/course/types";
 import { useT } from "@/lib/i18n/client";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
@@ -58,7 +58,7 @@ export function TeachInput({
   documents: DocumentRow[];
   onDismissUpload: (id: string) => void;
 }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   const id = useId();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [topic, setTopic] = useState("");
@@ -69,7 +69,39 @@ export function TeachInput({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [suggestions, setSuggestions] = useState<Record<string, string[]>>({});
+
   const levelValue = (level === OTHER ? otherLevel : level).trim();
+  const suggestionKey = `${locale}|${levelValue.toLowerCase()}`;
+  const currentSuggestions = suggestions[suggestionKey];
+
+  // Recommandations selon le cours et le niveau. Le délai évite un appel par lettre d'un niveau libre.
+  useEffect(() => {
+    if (currentSuggestions) return;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      let items: string[] = [];
+      try {
+        const response = await fetch(`/api/courses/${courseId}/teach-suggestions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(levelValue ? { level: levelValue.slice(0, TEACH_LEVEL_MAX) } : {}),
+          signal: controller.signal,
+        });
+        const data = (await response.json().catch(() => null)) as { suggestions?: unknown } | null;
+        if (response.ok && Array.isArray(data?.suggestions)) {
+          items = data.suggestions.filter((s): s is string => typeof s === "string");
+        }
+      } catch {
+        if (controller.signal.aborted) return;
+      }
+      if (!controller.signal.aborted) setSuggestions((current) => ({ ...current, [suggestionKey]: items }));
+    }, 350);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [courseId, currentSuggestions, levelValue, suggestionKey]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -116,8 +148,8 @@ export function TeachInput({
     setError(message);
   }
 
-  function pickExample(example: string) {
-    setTopic(example);
+  function pickSuggestion(suggestion: string) {
+    setTopic(suggestion);
     setError(null);
     inputRef.current?.focus();
   }
@@ -231,22 +263,42 @@ export function TeachInput({
           </button>
         </form>
 
-        {/* Exemples et options, discrets, sous la barre */}
-        <div className="mt-2 flex items-center gap-2 text-xs">
-          <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <span className="shrink-0 text-muted">{t.teach.examplesLabel}</span>
-            {t.teach.examples.map((example) => (
-              <button
-                key={example}
-                type="button"
-                disabled={pending}
-                onClick={() => pickExample(example)}
-                className="shrink-0 rounded-full border border-line bg-surface px-2.5 py-1 text-muted transition hover:border-accent/50 hover:bg-accent-soft hover:text-accent-text disabled:opacity-50"
-              >
-                {example}
-              </button>
+        {/* Recommandations selon le cours et le niveau (masquées s'il n'y en a pas) */}
+        {currentSuggestions === undefined ? (
+          <div aria-hidden className="mt-2 grid gap-1.5 sm:grid-cols-2">
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className={`h-9 animate-pulse rounded-xl bg-surface-2 motion-reduce:animate-none ${i > 1 ? "hidden sm:block" : ""}`}
+              />
             ))}
           </div>
+        ) : (
+          currentSuggestions.length > 0 && (
+            <div role="group" aria-label={t.teach.suggestionsLabel} className="mt-2 grid gap-1.5 sm:grid-cols-2">
+              {currentSuggestions.map((suggestion, i) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  disabled={pending}
+                  title={suggestion}
+                  onClick={() => pickSuggestion(suggestion)}
+                  className={`min-h-9 rounded-xl border border-line bg-surface px-3 py-1.5 text-left text-xs leading-snug text-muted transition hover:border-accent/50 hover:bg-accent-soft hover:text-accent-text disabled:opacity-50 ${
+                    i > 1 ? "hidden sm:block" : ""
+                  }`}
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          )
+        )}
+
+        <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+          <p className="flex min-w-0 items-center gap-1.5 text-muted opacity-70">
+            <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-500" />
+            <span className="truncate">{t.teach.context}</span>
+          </p>
           <button
             type="button"
             onClick={() => setOptionsOpen((o) => !o)}
@@ -267,10 +319,6 @@ export function TeachInput({
             </svg>
           </button>
         </div>
-        <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-xs opacity-50">
-          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
-          {t.teach.context}
-        </p>
       </div>
     </div>
   );

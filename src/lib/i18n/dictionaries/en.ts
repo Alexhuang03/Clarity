@@ -148,8 +148,7 @@ export const en: Dictionary = {
     emptyTeachTitle: "Or type a topic in the bar",
     emptyTeachText:
       "Clarity writes a complete course, chapter by chapter, citing web sources. You can specify your level and your goal.",
-    examplesLabel: "Examples:",
-    examples: ["Pythagoras' theorem", "Photosynthesis", "The Cold War", "Integrals"],
+    suggestionsLabel: "Suggestions for this course",
     options: "Level and goal",
     levelLabel: "Level",
     levels: ["Middle school", "High school", "Bachelor's", "Master's"],
