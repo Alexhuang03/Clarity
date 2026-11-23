@@ -1,4 +1,5 @@
 import "server-only";
+import { safeError } from "@/lib/security/log";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { modelChain } from "@/lib/ai/models";
 import { generateWithFallback } from "@/lib/ai/providers";
@@ -89,7 +90,7 @@ async function titleParts(parts: ChunkRow[][]): Promise<string[]> {
       return titles.map((t: unknown, i: number) => (typeof t === "string" && t.trim() ? t.trim() : fallback[i]));
     }
   } catch (error) {
-    console.warn("[analyse] titres IA indisponibles", error);
+    console.warn("[analyse] titres IA indisponibles", safeError(error));
   }
   return fallback;
 }

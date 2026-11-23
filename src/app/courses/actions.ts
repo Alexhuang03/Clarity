@@ -1,5 +1,6 @@
 "use server";
 
+import { safeError } from "@/lib/security/log";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
@@ -200,7 +201,7 @@ export async function analyzeCourse(courseId: string) {
     const parts = await runAnalysis(supabase, courseId);
     return { parts };
   } catch (error) {
-    console.error("[analyse] échec", error);
+    console.error("[analyse] échec", safeError(error));
     return { error: "L'analyse a échoué. Réessaie." };
   }
 }
@@ -260,7 +261,7 @@ export async function syncParts(courseId: string) {
   try {
     return { parts: await syncCourseParts(supabase, courseId) };
   } catch (error) {
-    console.error("[analyse] mise à jour des parties échouée", error);
+    console.error("[analyse] mise à jour des parties échouée", safeError(error));
     return { error: "Les nouvelles parties n'ont pas pu être créées." };
   }
 }
@@ -286,7 +287,7 @@ export async function addLink(input: { courseId: string; url: string; kind: "cou
   try {
     fetched = await fetchLink(url);
   } catch (error) {
-    if (!(error instanceof UserFacingError)) console.error("[lien] récupération échouée", url, error);
+    if (!(error instanceof UserFacingError)) console.error("[lien] récupération échouée", safeError(error));
     return { error: error instanceof UserFacingError ? error.message : "Impossible de récupérer ce lien." };
   }
 

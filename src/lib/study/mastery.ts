@@ -1,4 +1,5 @@
 import "server-only";
+import { safeError } from "@/lib/security/log";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ConceptMastery, MasteryLevel } from "./types";
 
@@ -51,7 +52,7 @@ export async function recordConceptEvents(
   if (!rows.length) return;
   const { error } = await supabase.from("study_concept_events").insert(rows);
   // Le suivi n'empêche jamais la correction : on le signale seulement
-  if (error) console.error("[révision] suivi des notions non enregistré", error);
+  if (error) console.error("[révision] suivi des notions non enregistré", safeError(error));
 }
 
 export function levelOf(mastery: number): MasteryLevel {

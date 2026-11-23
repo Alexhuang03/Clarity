@@ -1,4 +1,5 @@
 import "server-only";
+import { safeError } from "@/lib/security/log";
 import { modelChain } from "@/lib/ai/models";
 import type { Source } from "@/lib/course/sources";
 import { loadScopedContent, pickSources, type CourseContext } from "./content";
@@ -318,7 +319,7 @@ export async function reviewCard(session: Session, cardId: string, rating: Ratin
   const { error: logError } = await supabase
     .from("study_card_reviews")
     .insert({ user_id: userId, course_id: courseId, card_id: cardId, rating, interval_days: next.intervalDays });
-  if (logError) console.error("[révision] historique de révision non enregistré", logError);
+  if (logError) console.error("[révision] historique de révision non enregistré", safeError(logError));
   if (card.concept) {
     await recordConceptEvents(supabase, courseId, userId, [
       { concept: card.concept, score: RATING_SCORE[rating], source: "flashcard", refId: cardId },

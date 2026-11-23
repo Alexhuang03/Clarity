@@ -1,4 +1,5 @@
 import "server-only";
+import { safeError } from "@/lib/security/log";
 import type { ModelId } from "@/lib/ai/models";
 import { streamWithFallback, type ChatRequest } from "@/lib/ai/providers";
 
@@ -17,7 +18,7 @@ export function ndjsonResponse(run: (send: (event: StreamEvent) => void) => Prom
       try {
         await run(send);
       } catch (error) {
-        console.error("[ia] génération échouée", error);
+        console.error("[ia] génération échouée", safeError(error));
         const message = error instanceof Error ? error.message : "";
         send({
           type: "error",

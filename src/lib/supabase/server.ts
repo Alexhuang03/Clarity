@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { connection } from "next/server";
 import { cookies } from "next/headers";
+import { AUTH_COOKIE_OPTIONS } from "./cookie-options";
 
 // Un nouveau client par requête (ne jamais le partager entre requêtes).
 // connection() : Supabase compare l'expiration du jeton avec Date.now(), donc ce code
@@ -13,6 +14,7 @@ export async function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
+      cookieOptions: AUTH_COOKIE_OPTIONS,
       cookies: {
         getAll() {
           return cookieStore.getAll();

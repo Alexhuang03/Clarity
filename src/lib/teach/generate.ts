@@ -1,4 +1,5 @@
 import "server-only";
+import { safeError } from "@/lib/security/log";
 import { embed } from "@/lib/ai/gemini";
 import { modelChain } from "@/lib/ai/models";
 import { streamWithFallback } from "@/lib/ai/providers";
@@ -374,7 +375,7 @@ export async function generateTeachCourse(courseId: string) {
       `[professeur] cours ${courseId} prêt : ${plan.chapters.length} chapitres, ${sources.length} sources (${provider}), ${chunks.length} morceaux, ${((Date.now() - started) / 1000).toFixed(0)} s`,
     );
   } catch (e) {
-    console.error("[professeur] échec", courseId, e);
+    console.error("[professeur] échec", courseId, safeError(e));
     const message = e instanceof Error ? e.message : String(e);
     await setStatus({
       status: "error",

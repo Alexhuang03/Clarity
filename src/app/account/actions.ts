@@ -1,5 +1,6 @@
 "use server";
 
+import { safeError } from "@/lib/security/log";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -45,7 +46,7 @@ export async function deleteAccount(
     const { error } = await admin.auth.admin.deleteUser(user.id);
     if (error) throw error;
   } catch (e) {
-    console.error("Suppression du compte échouée", e);
+    console.error("Suppression du compte échouée", safeError(e));
     return { error: "La suppression a échoué. Réessaie plus tard." };
   }
 

@@ -1,4 +1,5 @@
 import "server-only";
+import { safeError } from "@/lib/security/log";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadCourseContext } from "@/lib/course/context";
 import { enforceRateLimit, enforceRateLimits, RATE_LIMITS } from "@/lib/security/rate-limit";
@@ -23,7 +24,7 @@ export async function handle(run: () => Promise<Response>): Promise<Response> {
     if (error instanceof StudyError) {
       return Response.json({ error: error.message }, { status: error.status, headers: { "Cache-Control": "no-store", ...error.headers } });
     }
-    console.error("[révision] erreur inattendue", error);
+    console.error("[révision] erreur inattendue", safeError(error));
     return Response.json({ error: "Erreur interne. Réessaie." }, { status: 500 });
   }
 }
@@ -84,7 +85,7 @@ export const scopeSchema: Schema<StudyScope> = v.optional(
 
 /** Erreur Supabase → erreur générique (le détail reste dans les journaux). */
 export function dbError(error: unknown, message = "Erreur de base de données. Réessaie."): never {
-  console.error("[révision] base de données", error);
+  console.error("[révision] base de données", safeError(error));
   throw new StudyError(message, 500);
 }
 

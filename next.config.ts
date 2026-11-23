@@ -86,6 +86,8 @@ const nextConfig: NextConfig = {
       { source: "/:path*", headers: securityHeaders },
       // Réponses de l'API : pas d'indexation (le cache est réglé par chaque route : les émotes se gardent en cache)
       { source: "/api/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex" }] },
+      // Réponses privées : jamais gardées par un navigateur ou un proxy (sauf les fichiers d'émotes, en « private »)
+      { source: "/api/:path((?!emotes/[^/]+/).*)", headers: [{ key: "Cache-Control", value: "no-store" }] },
       // Pages partagées : pas d'indexation par les moteurs de recherche, pas de référent
       {
         source: "/share/:path*",

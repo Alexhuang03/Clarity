@@ -1,4 +1,5 @@
 import "server-only";
+import { safeError } from "@/lib/security/log";
 import { modelChain } from "@/lib/ai/models";
 import { generateWithFallback, type ChatMessage } from "@/lib/ai/providers";
 
@@ -148,7 +149,7 @@ export async function understandQuestion(
       search: typeof parsed.search === "string" && parsed.search.trim() ? parsed.search.trim() : question,
     };
   } catch (error) {
-    console.warn("[analyse question] indisponible, question traitée comme une question de cours", error);
+    console.warn("[analyse question] indisponible, question traitée comme une question de cours", safeError(error));
     return fallback;
   }
 }

@@ -1,4 +1,5 @@
 import "server-only";
+import { safeError } from "@/lib/security/log";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { processDocument } from "./pipeline";
 
@@ -32,7 +33,7 @@ async function drain() {
       await processDocument(id);
     } catch (error) {
       // processDocument enregistre déjà ses erreurs sur le document ; ceci est un filet de sécurité
-      console.error("[file] erreur inattendue", id, error);
+      console.error("[file] erreur inattendue", id, safeError(error));
     } finally {
       state.queued.delete(id);
       state.running = null;

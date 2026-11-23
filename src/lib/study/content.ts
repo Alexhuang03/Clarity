@@ -1,4 +1,5 @@
 import "server-only";
+import { safeError } from "@/lib/security/log";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { embed } from "@/lib/ai/gemini";
 import type { loadCourseContext } from "@/lib/course/context";
@@ -145,7 +146,7 @@ export async function loadConceptContent(
       return build(ctx, chunks, truncated);
     }
   } catch (error) {
-    console.warn("[révision] recherche des notions faibles impossible, contenu réparti", error);
+    console.warn("[révision] recherche des notions faibles impossible, contenu réparti", safeError(error));
   }
   return loadScopedContent(supabase, ctx, {}, budget, { shuffle: true });
 }

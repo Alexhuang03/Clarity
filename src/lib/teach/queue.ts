@@ -1,4 +1,5 @@
 import "server-only";
+import { safeError } from "@/lib/security/log";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateTeachCourse } from "./generate";
 
@@ -27,7 +28,7 @@ async function drain() {
     try {
       await generateTeachCourse(id);
     } catch (error) {
-      console.error("[professeur] erreur inattendue", id, error);
+      console.error("[professeur] erreur inattendue", id, safeError(error));
     } finally {
       state.queued.delete(id);
       state.running = null;

@@ -1,4 +1,5 @@
 import "server-only";
+import { safeError } from "@/lib/security/log";
 import JSZip from "jszip";
 import mammoth from "mammoth";
 import TurndownService from "turndown";
@@ -180,7 +181,7 @@ async function prepareImage(data: Uint8Array, mimeType: string): Promise<{ data:
     );
     return { data: new Uint8Array(out), mimeType: png ? "image/png" : "image/jpeg" };
   } catch (error) {
-    console.warn("[ingest] image non préparée, envoyée telle quelle", error);
+    console.warn("[ingest] image non préparée, envoyée telle quelle", safeError(error));
     return { data, mimeType };
   }
 }

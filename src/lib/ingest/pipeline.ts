@@ -1,4 +1,5 @@
 import "server-only";
+import { safeError } from "@/lib/security/log";
 import { embed } from "@/lib/ai/gemini";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { chunkPages } from "./chunk";
@@ -16,7 +17,7 @@ export async function processDocument(documentId: string) {
     admin.from("documents").update(fields).eq("id", documentId);
 
   const { data: doc, error } = await admin.from("documents").select("*").eq("id", documentId).single();
-  if (error || !doc) return console.error("[ingest] document introuvable", documentId, error);
+  if (error || !doc) return console.error("[ingest] document introuvable", documentId, safeError(error));
   // Document d'un cours du mode professeur : rédigé par l'IA (src/lib/teach), il n'y a pas de fichier à relire
   const { data: teach } = await admin.from("course_web").select("course_id").eq("document_id", documentId).maybeSingle();
   if (teach) {
@@ -91,7 +92,7 @@ export async function processDocument(documentId: string) {
       char_count: chunks.reduce((n, c) => n + c.content.length, 0),
     });
   } catch (e) {
-    console.error("[ingest] échec", documentId, e);
+    console.error("[ingest] échec", documentId, safeError(e));
     const message = e instanceof Error ? e.message : String(e);
     await setStatus({
       status: "error",

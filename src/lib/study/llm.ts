@@ -1,4 +1,5 @@
 import "server-only";
+import { safeError } from "@/lib/security/log";
 import type { ModelId } from "@/lib/ai/models";
 import { streamWithFallback, type ChatMessage } from "@/lib/ai/providers";
 import { repairMessage } from "./prompts";
@@ -101,7 +102,7 @@ export async function generateJson<T>(
   } catch (error) {
     // Limite de débit atteinte entre deux essais : message tel quel (429)
     if (error instanceof StudyError) throw error;
-    console.error(`[révision] ${label} : génération échouée`, error);
+    console.error(`[révision] ${label} : génération échouée`, safeError(error));
     const message = error instanceof Error ? error.message : "";
     if (/429|quota|RESOURCE_EXHAUSTED/i.test(message)) {
       throw new StudyError("Les IA gratuites sont saturées pour le moment. Réessaie dans une minute.", 503);
